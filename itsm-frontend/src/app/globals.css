@@ -1,0 +1,97 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+:root {
+  --background: #ffffff;
+  --foreground: #1e293b;
+
+  /* Brand palette sampled from the ITSM design reference */
+  --color-navy-950: #0a1830;
+  --color-navy-900: #0d2144;
+  --color-navy-800: #14305e;
+
+  --color-brand-50: #eef3fe;
+  --color-brand-100: #dbe7fd;
+  --color-brand-500: #3b6ff0;
+  --color-brand-600: #2554d9;
+  --color-brand-700: #1c41ad;
+
+  --color-surface: #f7f9fc;
+  --color-border-subtle: #e6e9f0;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+
+  --color-navy-950: var(--color-navy-950);
+  --color-navy-900: var(--color-navy-900);
+  --color-navy-800: var(--color-navy-800);
+
+  --color-brand-50: var(--color-brand-50);
+  --color-brand-100: var(--color-brand-100);
+  --color-brand-500: var(--color-brand-500);
+  --color-brand-600: var(--color-brand-600);
+  --color-brand-700: var(--color-brand-700);
+
+  --color-surface: var(--color-surface);
+  --color-border-subtle: var(--color-border-subtle);
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Visible focus ring for keyboard navigation, respected across all interactive elements */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Thin, unobtrusive scrollbar for panels like the conversation box */
+.thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 9999px;
+}
+
+/* Hide scrollbar completely while keeping scroll functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE/Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;             /* Chrome/Safari/Opera */
+}
+
+/* Hide Next.js dev overlay indicator used in development (small "N" badge)
+   Multiple selectors are included to cover variations across Next versions. */
+#__next_dev_indicator,
+#__next_dev_overlay,
+.next-devtools-indicator,
+.next-dev-overlay,
+.next-devtools,
+[data-nextjs-devtools],
+[data-nextjs="dev"],
+.__next_devtools_indicator,
+[data-nextjs="dev-overlay"],
+div[class*="next-dev"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+

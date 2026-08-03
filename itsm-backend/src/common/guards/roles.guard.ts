@@ -1,0 +1,38 @@
+import { Injectable, CanActivate, ExecutionContext } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { ROLES_KEY } from "../decorators/roles.decorator";
+
+/**
+ * Reads the @Roles(...) metadata on the route handler and compares it against
+ * request.user.roles (populated by JwtStrategy.validate()).
+ * Must run AFTER JwtAuthGuard: @UseGuards(JwtAuthGuard, RolesGuard)
+ */
+@Injectable()
+export class RolesGuard implements CanActivate {
+  constructor(private reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    // No @Roles() decorator on this route -> no role restriction
+    if (!requiredRoles || requiredRoles.length === 0) {
+      return true;
+    }
+
+    const { user } = context.switchToHttp().getRequest();
+    if (!user || !Array.isArray(user.roles)) {
+      return false;
+    }
+
+    const normalize = (role: string) =>
+      role === "Administrator" ? "Admin" : role;
+
+    const userRoles = user.roles.map(normalize);
+    const required = requiredRoles.map(normalize);
+
+    return required.some((role) => userRoles.includes(role));
+  }
+}
