@@ -27,12 +27,12 @@ export default function AdminAssignmentGroupPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     groupName: "", groupCode: "", description: "",
-    managerId: "" as number | "", memberIds: [] as number[], isActive: true,
+    managerId: "" as number | "", memberIds: [] as number[], isActive: true, isDefault: false,
   });
 
   const openCreate = () => {
     setEditItem(null);
-    setForm({ groupName: "", groupCode: "", description: "", managerId: "", memberIds: [], isActive: true });
+    setForm({ groupName: "", groupCode: "", description: "", managerId: "", memberIds: [], isActive: true, isDefault: false });
     setDialog(true);
   };
 
@@ -44,6 +44,7 @@ export default function AdminAssignmentGroupPage() {
       managerId: item.manager?.userId ?? "",
       memberIds: item.members.map((m) => m.userId),
       isActive: item.isActive,
+      isDefault: item.isDefault,
     });
     setDialog(true);
   };
@@ -69,7 +70,12 @@ export default function AdminAssignmentGroupPage() {
   };
 
   const columns: Column<AssignmentGroup>[] = [
-    { key: "groupName", label: "Group Name", sortable: true, render: (r) => <span className="font-medium">{r.groupName}</span> },
+    { key: "groupName", label: "Group Name", sortable: true, render: (r) => (
+      <div className="flex items-center gap-2">
+        <span className="font-medium">{r.groupName}</span>
+        {r.isDefault && <span className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.5 rounded-sm font-semibold">DEFAULT</span>}
+      </div>
+    ) },
     { key: "groupCode", label: "Group Code", render: (r) => <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">{r.groupCode}</code> },
     { key: "manager", label: "Manager", render: (r) => <span className="text-slate-500">{r.manager?.fullName ?? "—"}</span> },
     { key: "members", label: "Members", render: (r) => (
@@ -94,7 +100,7 @@ export default function AdminAssignmentGroupPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="w-full">
       <Breadcrumb items={[{ label: "Home", href: "/home" }, { label: "Admin" }, { label: "Assignment Groups" }]} />
       <PageHeader title="Assignment Group Management" description="Create, edit and manage assignment groups."
         action={<Button onClick={openCreate} className="gap-1.5"><Plus className="size-4" /> New Assignment Group</Button>}
@@ -144,9 +150,15 @@ export default function AdminAssignmentGroupPage() {
               </div>
               <p className="text-xs text-slate-400">{form.memberIds.length} member{form.memberIds.length !== 1 ? "s" : ""} selected</p>
             </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" checked={form.isActive} onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))} className="accent-blue-600" />
-              <label className="text-sm text-gray-700">Active</label>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={form.isActive} onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))} className="accent-blue-600" />
+                <label className="text-sm text-gray-700">Active</label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={form.isDefault} onChange={(e) => setForm((p) => ({ ...p, isDefault: e.target.checked }))} className="accent-blue-600" />
+                <label className="text-sm text-gray-700">Default Group</label>
+              </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialog(false)} disabled={saving}>Cancel</Button>

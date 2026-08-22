@@ -2,10 +2,11 @@ import {
   Home, FilePlus2, ClipboardList, BookOpen, ShoppingCart,
   CheckSquare, UserCircle, Bell, Users, Shield, Tag, LayoutGrid,
   GitBranch, Settings, AlertTriangle, TrendingUp, Zap, MapPin,
-  Group, Layers, Activity,
+  Group, Layers, Activity, Inbox, LayoutDashboard,
 } from "lucide-react";
 
-export const primaryNavItems = [
+// Shown to End Users (requesters) — raising and tracking their own tickets.
+export const requesterNavItems = [
   { label: "Home",            href: "/home",                         icon: Home },
   { label: "Create Incident", href: "/incidents/create",             icon: FilePlus2 },
   { label: "My Incidents",    href: "/incidents",                    icon: ClipboardList },
@@ -16,6 +17,24 @@ export const primaryNavItems = [
   { label: "My Profile",      href: "/profile",                      icon: UserCircle },
   { label: "Notifications",   href: "/notifications",                icon: Bell },
 ] as const;
+
+// Shown to IT Agent / IT Manager / Service Desk / Admin — working the queue.
+export const analystNavItems = [
+  { label: "Home",              href: "/home",                          icon: Home },
+  { label: "Analyst Dashboard", href: "/analyst-dashboard",             icon: LayoutDashboard },
+  { label: "Incident Queue",    href: "/incidents/queue",               icon: Inbox },
+  { label: "Incidents",         href: "/incidents",                     icon: ClipboardList },
+  { label: "Create Incident",   href: "/incidents/create",              icon: FilePlus2 },
+  { label: "Service Requests",  href: "/service-requests/my-requests",  icon: LayoutGrid },
+  { label: "Service Catalog",   href: "/service-requests",              icon: ShoppingCart },
+  { label: "My Approvals",      href: "/approvals",                     icon: CheckSquare },
+  { label: "Knowledge Base",    href: "/knowledge-base",                icon: BookOpen },
+  { label: "My Profile",        href: "/profile",                       icon: UserCircle },
+  { label: "Notifications",     href: "/notifications",                 icon: Bell },
+] as const;
+
+// Kept for any existing imports; requester list is the historical default.
+export const primaryNavItems = requesterNavItems;
 
 export const adminNavItems = [
   { label: "Status",           href: "/admin/status",           icon: Activity },

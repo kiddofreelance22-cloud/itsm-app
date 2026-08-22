@@ -4,6 +4,8 @@ import * as dotenv from "dotenv";
 
 dotenv.config();
 
+const isProd = process.env.NODE_ENV === "production";
+
 export default new DataSource({
   type: "postgres",
   host: process.env.DB_HOST,
@@ -11,8 +13,16 @@ export default new DataSource({
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  entities: ["src/modules/**/entities/*.entity.ts"],
-  migrations: ["src/database/migrations/*.ts"],
-  synchronize: true,
-  logging: process.env.NODE_ENV === "development",
+  entities: [
+    isProd
+      ? "dist/modules/**/entities/*.entity.js"
+      : "src/modules/**/entities/*.entity.ts"
+  ],
+  migrations: [
+    isProd
+      ? "dist/database/migrations/*.js"
+      : "src/database/migrations/*.ts"
+  ],
+  synchronize: false,
+  logging: !isProd,
 });

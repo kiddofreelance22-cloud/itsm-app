@@ -46,7 +46,7 @@ export function CatalogFormDialog({
         catalogName: catalog.catalogName,
         shortDescription: catalog.shortDescription ?? "",
         description: catalog.description ?? "",
-        categoryId: catalog.category.categoryId,
+        categoryId: catalog.category?.categoryId ?? "",
         iconUrl: catalog.iconUrl ?? "",
         workflowId: catalog.workflow?.workflowId ?? "",
         isActive: catalog.isActive,

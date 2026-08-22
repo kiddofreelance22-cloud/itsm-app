@@ -50,7 +50,7 @@ export default function AdminWorkflowsPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="w-full">
       <Breadcrumb items={[{ label: "Home", href: "/home" }, { label: "Admin" }, { label: "Workflows" }]} />
       <PageHeader title="Workflows" description="Define approval and task flows for service requests."
         action={

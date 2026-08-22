@@ -6,7 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageSpinner } from "@/components/ui/spinner";
-import { StepBuilder } from "@/components/admin/step-builder";
+import { WorkflowFlowDiagram } from "@/components/admin/workflow-flow-diagram";
 import { useAdminWorkflows, useAdminRoles } from "@/lib/hooks/use-admin";
 import { useEffect, useState } from "react";
 import { Workflow } from "@/types/workflow";
@@ -45,7 +45,7 @@ export default function AdminWorkflowDetailPage() {
   if (!workflow) return <p className="p-8 text-slate-500">Workflow not found.</p>;
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="w-full">
       <Breadcrumb items={[
         { label: "Home", href: "/home" },
         { label: "Admin" },
@@ -67,7 +67,7 @@ export default function AdminWorkflowDetailPage() {
 
       <Card>
         <CardContent className="pt-5">
-          <StepBuilder
+          <WorkflowFlowDiagram
             workflowId={workflowId}
             steps={workflow.steps}
             roles={roles}

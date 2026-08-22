@@ -21,10 +21,13 @@ describe("UsersService", () => {
       sendFirstTimeLoginEmail: jest.fn().mockResolvedValue(undefined),
     };
 
+    const groupsRepo = { findOne: jest.fn().mockResolvedValue(null) };
+
     const service = new UsersService(
       usersRepo as any,
       rolesRepo as any,
       userRolesRepo as any,
+      groupsRepo as any,
       mailService as any,
     );
 

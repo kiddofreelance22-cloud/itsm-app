@@ -77,34 +77,34 @@ export class RequestsService {
 
     const firstStep = catalog.workflow
       ? await this.workflowsService.getFirstStep(catalog.workflow.workflowId)
-      : null;
+      : undefined;
 
     const request = this.requestsRepo.create({
-      catalog,
-      requestedBy,
       status: firstStep ? "In Progress" : "Submitted",
-      currentStep: firstStep,
     });
+    request.catalog = catalog;
+    request.requestedBy = requestedBy;
+    if (firstStep) request.currentStep = firstStep;
     const savedRequest = await this.requestsRepo.save(request);
 
-    const values = dto.variableValues.map((vv) =>
-      this.valuesRepo.create({
-        request: savedRequest,
+    const values = dto.variableValues.map((vv) => {
+      const val = this.valuesRepo.create({
         variable: { variableId: vv.variableId } as CatalogVariable,
         value: vv.value,
-      })
-    );
+      });
+      val.request = savedRequest;
+      return val;
+    });
     await this.valuesRepo.save(values);
 
-    await this.historyRepo.save(
-      this.historyRepo.create({
-        request: savedRequest,
-        workflowStep: firstStep,
-        action: "Submitted",
-        actionBy: requestedBy,
-        comments: null as any,
-      })
-    );
+    const histEntry = this.historyRepo.create({
+      action: "Submitted",
+      actionBy: requestedBy,
+      comments: undefined,
+    });
+    histEntry.request = savedRequest;
+    if (firstStep) histEntry.workflowStep = firstStep;
+    await this.historyRepo.save(histEntry);
 
     if (firstStep?.approverRole) {
       // In a full implementation, look up users with this role and email each one.
@@ -163,38 +163,36 @@ export class RequestsService {
       );
     }
 
-    await this.historyRepo.save(
-      this.historyRepo.create({
-        request,
-        workflowStep: request.currentStep,
-        action,
-        actionBy: actingUser,
-        comments: comments ?? (null as any),
-      })
-    );
+    const histEntry = this.historyRepo.create({
+      action,
+      actionBy: actingUser,
+      comments: comments ?? undefined,
+    });
+    histEntry.request = request;
+    if (request.currentStep) histEntry.workflowStep = request.currentStep;
+    await this.historyRepo.save(histEntry);
 
     if (action === "Rejected") {
       request.status = "Rejected";
-      request.currentStep = null;
+      request.currentStep = undefined;
       request.closedAt = new Date();
       return this.requestsRepo.save(request);
     }
 
-    // Approved -> move to next step, or close out if this was the last step
     const workflowId = request.catalog.workflow?.workflowId;
     const nextStep = workflowId && request.currentStep
       ? await this.workflowsService.getNextStep(
           workflowId,
           request.currentStep.stepOrder
         )
-      : null;
+      : undefined;
 
     if (nextStep) {
       request.currentStep = nextStep;
       request.status = "In Progress";
     } else {
       request.status = "Approved";
-      request.currentStep = null;
+      request.currentStep = undefined;
       request.closedAt = new Date();
     }
 

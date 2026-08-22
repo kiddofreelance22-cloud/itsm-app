@@ -26,7 +26,7 @@ export default function AdminCatalogsPage() {
     { key: "catalogName", label: "Name", sortable: true,
       render: (c) => <span className="font-medium">{c.catalogName}</span> },
     { key: "category", label: "Category",
-      render: (c) => <span className="text-slate-500">{c.category.categoryName}</span> },
+      render: (c) => <span className="text-slate-500">{c.category?.categoryName ?? "Uncategorized"}</span> },
     { key: "workflow", label: "Workflow",
       render: (c) => <span className="text-slate-500">{c.workflow?.workflowName ?? "None"}</span> },
     { key: "isActive", label: "Status",
@@ -57,7 +57,7 @@ export default function AdminCatalogsPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="w-full">
       <Breadcrumb items={[{ label: "Home", href: "/home" }, { label: "Admin" }, { label: "Catalogs" }]} />
       <PageHeader title="Catalog Items" description="Manage service catalog items and their form fields."
         action={

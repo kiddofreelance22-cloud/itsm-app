@@ -47,6 +47,10 @@ export const AssignmentGroupApi = {
   create: (body: object) => apiFetch<AssignmentGroup>("/assignment-groups", { method: "POST", body: JSON.stringify(body) }),
   update: (id: number, body: object) => apiFetch<AssignmentGroup>(`/assignment-groups/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   remove: (id: number) => apiFetch<void>(`/assignment-groups/${id}`, { method: "DELETE" }),
+  addMember: (groupId: number, userId: number) =>
+    apiFetch<AssignmentGroup>(`/assignment-groups/${groupId}/members/${userId}`, { method: "POST" }),
+  removeMember: (groupId: number, userId: number) =>
+    apiFetch<AssignmentGroup>(`/assignment-groups/${groupId}/members/${userId}`, { method: "DELETE" }),
 };
 
 // ── Location ──────────────────────────────────────────────────────────────────

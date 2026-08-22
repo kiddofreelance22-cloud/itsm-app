@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { type ElementType } from "react";
 import { usePathname } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { primaryNavItems } from "./nav-items";
+import { requesterNavItems, analystNavItems } from "./nav-items";
 import { useAuth } from "@/lib/hooks/use-auth";
 
 interface SidebarProps {
@@ -38,14 +38,36 @@ function NavLink({ href, icon: Icon, label, onNavigate }: {
 }
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
-  const { isAdmin, logout } = useAuth();
+  const { isAdmin, isAnalyst, isManager, isServiceDesk, logout } = useAuth();
+  // Admins get the full analyst nav + admin console link
+  const items = (isAnalyst || isAdmin) ? analystNavItems : requesterNavItems;
+  // Section label mirrors the "Analyst Workspace" grouping used across the
+  // analyst mockups so agents/managers/service desk feel oriented.
+  const sectionLabel = isAdmin
+    ? "Admin Workspace"
+    : isAnalyst
+    ? isManager ? "Manager Workspace" : isServiceDesk ? "Service Desk Workspace" : "Analyst Workspace"
+    : null;
 
   return (
     <div className="flex h-full flex-col justify-between">
       <nav aria-label="Primary" className="flex flex-col gap-1 p-3 flex-1 overflow-y-auto">
-        {primaryNavItems.map((item) => (
+        {sectionLabel && (
+          <p className="mb-1 mt-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+            {sectionLabel}
+          </p>
+        )}
+        {items.map((item) => (
           <NavLink key={item.href} {...item} onNavigate={onNavigate} />
         ))}
+        {isAdmin && (
+          <>
+            <p className="mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+              Admin
+            </p>
+            <NavLink href="/admin/users" icon={Settings} label="Admin Console" onNavigate={onNavigate} />
+          </>
+        )}
       </nav>
 
       <div className="border-t border-slate-100 p-3">

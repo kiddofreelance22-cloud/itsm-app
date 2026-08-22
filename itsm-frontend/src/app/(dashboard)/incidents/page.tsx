@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState, Suspense } from "react";
+import { useMemo, useState, Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Search, SlidersHorizontal, Plus } from "lucide-react";
+import { Search, SlidersHorizontal, Plus, RotateCcw, CalendarDays } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -14,10 +14,13 @@ import { PageSpinner } from "@/components/ui/spinner";
 import { useIncidents } from "@/lib/hooks/use-incidents";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { Incident } from "@/lib/api/incidents.api";
+import { apiFetch } from "@/lib/api/client";
+import { CategoriesApi } from "@/lib/api/categories.api";
+import { AssignmentGroupApi } from "@/lib/api/admin-modules.api";
+import { Status, Priority, Category } from "@/types/admin";
+import { AssignmentGroup } from "@/lib/api/incidents.api";
 
 const PAGE_SIZE = 10;
-const STATUS_OPTIONS = ["Open", "In Progress", "Resolved", "Closed"];
-const PRIORITY_OPTIONS = ["Low", "Medium", "High", "Critical"];
 
 function priorityColor(p: string) {
   return p === "Critical" ? "bg-red-100 text-red-700"
@@ -57,34 +60,89 @@ function IncidentRow({ inc }: { inc: Incident }) {
 
 function MyIncidentsContent() {
   const searchParams = useSearchParams();
-  const { isAdmin } = useAuth();
-  const { incidents, isLoading } = useIncidents(isAdmin ? "all" : "mine");
+  const { isAdmin, isAnalyst } = useAuth();
+  const { incidents, isLoading } = useIncidents((isAdmin || isAnalyst) ? "all" : "mine");
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
   const [status, setStatus] = useState("All");
   const [priority, setPriority] = useState("All");
+  const [assignmentGroup, setAssignmentGroup] = useState("All");
+  const [category, setCategory] = useState("All");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
+  const [statusOptions, setStatusOptions] = useState<Status[]>([]);
+  const [priorityOptions, setPriorityOptions] = useState<Priority[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<Category[]>([]);
+  const [assignmentGroupOptions, setAssignmentGroupOptions] = useState<AssignmentGroup[]>([]);
+
+  // Pull from the same admin-configured Status / Priority lists used when
+  // creating an incident, so anything added there shows up here too.
+  useEffect(() => {
+    void Promise.allSettled([
+      apiFetch<Status[]>("/status"),
+      apiFetch<Priority[]>("/priority"),
+      CategoriesApi.list(),
+      AssignmentGroupApi.list(),
+    ]).then(([statuses, priorities, categories, groups]) => {
+      if (statuses.status === "fulfilled") {
+        setStatusOptions(statuses.value.filter((x) => x.isActive && x.type === "incident"));
+      }
+      if (priorities.status === "fulfilled") {
+        setPriorityOptions(priorities.value.filter((x) => x.isActive));
+      }
+      if (categories.status === "fulfilled") {
+        setCategoryOptions(categories.value.filter((x) => x.isActive));
+      }
+      if (groups.status === "fulfilled") {
+        setAssignmentGroupOptions(groups.value.filter((x) => x.isActive));
+      }
+    });
+  }, []);
 
   const filtered = useMemo(() => {
     return incidents.filter((inc) => {
       const q = query.toLowerCase();
-      const matchQ = !q || inc.title.toLowerCase().includes(q) || String(inc.incidentId).includes(q);
+      const matchQ = !q || inc.title.toLowerCase().includes(q) || String(inc.incidentId).toLowerCase().includes(q)
+        || inc.category?.categoryName.toLowerCase().includes(q)
+        || inc.assignmentGroup?.groupName.toLowerCase().includes(q);
       const matchS = status === "All" || inc.status === status;
       const matchP = priority === "All" || inc.priority === priority;
-      return matchQ && matchS && matchP;
+      const matchG = assignmentGroup === "All" || String(inc.assignmentGroup?.groupId) === assignmentGroup;
+      const matchC = category === "All" || String(inc.category?.categoryId) === category;
+      const createdAt = new Date(inc.createdAt);
+      const matchFrom = !dateFrom || createdAt >= new Date(`${dateFrom}T00:00:00`);
+      const matchTo = !dateTo || createdAt <= new Date(`${dateTo}T23:59:59.999`);
+      return matchQ && matchS && matchP && matchG && matchC && matchFrom && matchTo;
     });
-  }, [incidents, query, status, priority]);
+  }, [incidents, query, status, priority, assignmentGroup, category, dateFrom, dateTo]);
+
+  const activeFilterCount = [status, priority, assignmentGroup, category, dateFrom, dateTo]
+    .filter((value) => value && value !== "All").length;
+
+  function resetFilters() {
+    setQuery("");
+    setStatus("All");
+    setPriority("All");
+    setAssignmentGroup("All");
+    setCategory("All");
+    setDateFrom("");
+    setDateTo("");
+    setPage(1);
+  }
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
-    <div className="mx-auto max-w-7xl">
-      <Breadcrumb items={[{ label: "Home", href: "/home" }, { label: "My Incidents" }]} />
+    <div className="w-full">
+      <Breadcrumb items={[{ label: "Home", href: "/home" }, { label: (isAdmin || isAnalyst) ? "All Incidents" : "My Incidents" }]} />
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">My Incidents</h1>
-          <p className="mt-1 text-sm text-slate-500">View and track all your raised incidents.</p>
+          <h1 className="text-2xl font-bold text-slate-900">{(isAdmin || isAnalyst) ? "All Incidents" : "My Incidents"}</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {(isAdmin || isAnalyst) ? "All incidents across the system, regardless of status." : "View and track all your raised incidents."}
+          </p>
         </div>
         <Button asChild className="gap-1.5">
           <Link href="/incidents/create"><Plus className="size-4" /> New Incident</Link>
@@ -92,27 +150,40 @@ function MyIncidentsContent() {
       </div>
 
       <Card className="mt-6 p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-          <div className="flex-1">
-            <Input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-              placeholder="Search by title or ID..." leadingIcon={<Search />} />
-          </div>
-          <div className="flex gap-3 flex-wrap">
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-slate-500">Status</span>
-              <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="w-36">
-                <option>All</option>
-                {STATUS_OPTIONS.map((s) => <option key={s}>{s}</option>)}
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-slate-500">Priority</span>
-              <Select value={priority} onChange={(e) => { setPriority(e.target.value); setPage(1); }} className="w-36">
-                <option>All</option>
-                {PRIORITY_OPTIONS.map((p) => <option key={p}>{p}</option>)}
-              </Select>
-            </div>
-          </div>
+        <div className="grid gap-3 xl:grid-cols-[1.2fr_repeat(4,minmax(145px,1fr))_auto]">
+          <Input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }}
+            placeholder="Search in list..." leadingIcon={<Search />} aria-label="Search incidents" />
+          <Select aria-label="Filter by assignment group" value={assignmentGroup}
+            onChange={(e) => { setAssignmentGroup(e.target.value); setPage(1); }}>
+            <option value="All">All Assignment Groups</option>
+            {assignmentGroupOptions.map((group) => <option key={group.groupId} value={group.groupId}>{group.groupName}</option>)}
+          </Select>
+          <Select aria-label="Filter by category" value={category}
+            onChange={(e) => { setCategory(e.target.value); setPage(1); }}>
+            <option value="All">All Categories</option>
+            {categoryOptions.map((item) => <option key={item.categoryId} value={item.categoryId}>{item.categoryName}</option>)}
+          </Select>
+          <Select aria-label="Filter by priority" value={priority}
+            onChange={(e) => { setPriority(e.target.value); setPage(1); }}>
+            <option value="All">All Priorities</option>
+            {priorityOptions.map((item) => <option key={item.priorityId} value={item.priorityName}>{item.priorityName}</option>)}
+          </Select>
+          <Select aria-label="Filter by status" value={status}
+            onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
+            <option value="All">All Status</option>
+            {statusOptions.map((item) => <option key={item.statusId} value={item.statusName}>{item.statusName}</option>)}
+          </Select>
+          <Button type="button" variant="outline" onClick={resetFilters} title="Reset filters" className="gap-1.5">
+            <RotateCcw /> Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+          </Button>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3">
+          <span className="text-xs font-medium text-slate-500">Created between</span>
+          <Input type="date" value={dateFrom} max={dateTo || undefined} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+            aria-label="Created from date" className="w-auto min-w-40" leadingIcon={<CalendarDays />} />
+          <span className="text-xs text-slate-400">and</span>
+          <Input type="date" value={dateTo} min={dateFrom || undefined} onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+            aria-label="Created to date" className="w-auto min-w-40" leadingIcon={<CalendarDays />} />
         </div>
       </Card>
 

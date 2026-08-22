@@ -1,12 +1,6 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Body,
-  Param,
-  UseGuards,
+  Controller, Get, Post, Patch, Delete,
+  Body, Param, UseGuards,
 } from "@nestjs/common";
 import { ApiTags, ApiBearerAuth } from "@nestjs/swagger";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
@@ -22,37 +16,46 @@ import { UpdateCategoryDto } from "./dto/update-category.dto";
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("categories")
 export class CategoriesController {
-  constructor(private readonly categoriesService: CategoriesService) {}
+  constructor(private readonly svc: CategoriesService) {}
 
   @Post()
   @Roles("Admin")
   create(@Body() dto: CreateCategoryDto) {
-    return this.categoriesService.create(dto);
+    return this.svc.create(dto);
   }
 
-  // Readable by any authenticated user (needed for catalog browsing), not just Admin
+  /** All authenticated users can read categories */
   @Get()
   findAll() {
-    return this.categoriesService.findAll();
+    return this.svc.findAll();
   }
 
   @Get(":categoryId")
-  findOne(@Param("categoryId", ParseIntPipe) categoryId: number) {
-    return this.categoriesService.findOne(categoryId);
+  findOne(@Param("categoryId", ParseIntPipe) id: number) {
+    return this.svc.findOne(id);
   }
 
   @Patch(":categoryId")
   @Roles("Admin")
   update(
-    @Param("categoryId", ParseIntPipe) categoryId: number,
+    @Param("categoryId", ParseIntPipe) id: number,
     @Body() dto: UpdateCategoryDto
   ) {
-    return this.categoriesService.update(categoryId, dto);
+    return this.svc.update(id, dto);
+  }
+
+  @Patch(":categoryId/reorder")
+  @Roles("Admin")
+  reorder(
+    @Param("categoryId", ParseIntPipe) id: number,
+    @Body("displayOrder") newOrder: number
+  ) {
+    return this.svc.reorder(id, newOrder);
   }
 
   @Delete(":categoryId")
   @Roles("Admin")
-  remove(@Param("categoryId", ParseIntPipe) categoryId: number) {
-    return this.categoriesService.remove(categoryId);
+  remove(@Param("categoryId", ParseIntPipe) id: number) {
+    return this.svc.remove(id);
   }
 }

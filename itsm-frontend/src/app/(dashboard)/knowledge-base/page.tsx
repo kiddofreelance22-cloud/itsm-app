@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 
 export default function KnowledgeBasePage() {
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="w-full">
       <Breadcrumb items={[{ label: "Home", href: "/home" }, { label: "Knowledge Base" }]} />
       <div className="flex items-center gap-2">
         <BookOpen className="size-6 text-brand-600" aria-hidden="true" />

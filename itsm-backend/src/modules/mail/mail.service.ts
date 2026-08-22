@@ -24,13 +24,25 @@ export class MailService implements OnModuleInit {
   constructor(private config: ConfigService) {}
 
   onModuleInit() {
+    const host = this.config.get<string>("mail.host");
+    const port = this.config.get<number>("mail.port");
+    const secure = this.config.get<boolean>("mail.secure");
+    const user = this.config.get<string>("mail.user");
+    const password = this.config.get<string>("mail.password");
+
+    if (!host || !user || !password) {
+      this.logger.warn(
+        "SMTP configuration is incomplete. Set SMTP_HOST, SMTP_USER, and SMTP_PASSWORD (or SMTP_PASS) before sending mail."
+      );
+    }
+
     this.transporter = nodemailer.createTransport({
-      host: this.config.get<string>("mail.host"),
-      port: this.config.get<number>("mail.port"),
-      secure: this.config.get<boolean>("mail.secure"), // true for 465, false for 587/25 (STARTTLS)
+      host,
+      port,
+      secure,
       auth: {
-        user: this.config.get<string>("mail.user"),
-        pass: this.config.get<string>("mail.password"),
+        user,
+        pass: password,
       },
     });
   }
@@ -50,15 +62,23 @@ export class MailService implements OnModuleInit {
     const fromName = this.config.get<string>("mail.fromName");
     const fromAddress = this.config.get<string>("mail.fromAddress");
 
-    await this.transporter.sendMail({
-      from: `"${fromName}" <${fromAddress}>`,
-      to: options.to,
-      subject: options.subject,
-      html: options.html,
-      text: options.text,
-    });
+    try {
+      await this.transporter.sendMail({
+        from: `"${fromName}" <${fromAddress}>`,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+      });
 
-    this.logger.log(`Email sent: "${options.subject}" -> ${options.to}`);
+      this.logger.log(`Email sent: "${options.subject}" -> ${options.to}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send email "${options.subject}" to ${Array.isArray(options.to) ? options.to.join(", ") : options.to}`,
+        error instanceof Error ? error.stack : undefined
+      );
+      throw error;
+    }
   }
 
   /** First time login email with temporary password. */

@@ -13,24 +13,24 @@ export type WorkflowStepType = "approval" | "task" | "notification";
 @Entity("workflow_steps")
 export class WorkflowStep {
   @PrimaryGeneratedColumn({ name: "workflow_step_id" })
-  workflowStepId: number;
+  workflowStepId!: number;
 
   @ManyToOne(() => Workflow, (workflow) => workflow.steps, {
     onDelete: "CASCADE",
   })
   @JoinColumn({ name: "workflow_id" })
-  workflow: Workflow;
+  workflow!: Workflow;
 
   @Column({ name: "step_name" })
-  stepName: string;
+  stepName!: string;
 
   @Column({ name: "step_order" })
-  stepOrder: number;
+  stepOrder!: number;
 
   @Column({ name: "step_type" })
-  stepType: WorkflowStepType;
+  stepType!: WorkflowStepType;
 
   @ManyToOne(() => Role, { nullable: true, onDelete: "SET NULL" })
   @JoinColumn({ name: "approver_role_id" })
-  approverRole: Role | null;
+  approverRole?: Role;
 }

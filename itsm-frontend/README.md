@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and you will be redirected to the Login page automatically.
+Open [http://50.6.45.238:3000](http://50.6.45.238:3000) and you will be redirected to the Login page automatically.
 
 **Demo credentials:** any non-empty username + password will log you in (mock authentication).
 
@@ -141,7 +141,7 @@ npm install
 
 # 3. Start development server
 npm run dev
-# → http://localhost:3000
+# → http://50.6.45.238:3000
 
 # 4. Build for production
 npm run build

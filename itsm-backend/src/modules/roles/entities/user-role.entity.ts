@@ -14,16 +14,16 @@ import { Role } from "./role.entity";
 @Unique(["user", "role"])
 export class UserRole {
   @PrimaryGeneratedColumn({ name: "user_role_id" })
-  userRoleId: number;
+  userRoleId!: number;
 
   @ManyToOne(() => User, (user) => user.userRoles, { onDelete: "CASCADE" })
   @JoinColumn({ name: "user_id" })
-  user: User;
+  user!: User;
 
   @ManyToOne(() => Role, (role) => role.userRoles, { onDelete: "CASCADE" })
   @JoinColumn({ name: "role_id" })
-  role: Role;
+  role!: Role;
 
   @CreateDateColumn({ name: "assigned_at" })
-  assignedAt: Date;
+  assignedAt!: Date;
 }

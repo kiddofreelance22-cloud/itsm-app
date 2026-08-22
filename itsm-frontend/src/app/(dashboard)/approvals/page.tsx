@@ -25,7 +25,7 @@ export default function ApprovalsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="w-full">
       <Breadcrumb items={[{ label: "Home", href: "/home" }, { label: "My Approvals" }]} />
       <div className="flex items-center gap-2">
         <CheckSquare className="size-6 text-blue-600" />

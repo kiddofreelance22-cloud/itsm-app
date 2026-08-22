@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
+import { useRef, useState, useEffect, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   User,
@@ -25,45 +25,24 @@ import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { useIncidents } from "@/lib/hooks/use-incidents";
-import { useAdminCategories } from "@/lib/hooks/use-admin";
-
-const categoryOptions = [
-  { label: "Hardware", subCategories: ["Laptop", "Desktop", "Printer", "Monitor", "Peripherals"] },
-  { label: "Software", subCategories: ["Email", "Operating System", "Application", "License"] },
-  { label: "Network", subCategories: ["Wi-Fi", "VPN", "LAN", "Internet Access"] },
-  { label: "Access", subCategories: ["Account Lockout", "Password Reset", "Permissions"] },
-] as const;
-
-const locationOptions = ["Mumbai", "Delhi", "Bengaluru", "Pune", "Hyderabad", "Chennai"];
-
-const assignmentGroupOptions = [
-  "Desktop Support",
-  "Network Support",
-  "Hardware Support",
-  "Software Support",
-  "Service Desk",
-];
-
-const priorityOptions = ["Low", "Medium", "High", "Critical"] as const;
-const impactOptions = ["Low", "Medium", "High"] as const;
-const urgencyOptions = ["Low", "Medium", "High"] as const;
-
-const assetOptions = ["Laptop-001", "Laptop-014", "Desktop-022", "Printer-005", "Monitor-009"];
+import { CategoriesApi } from "@/lib/api/categories.api";
+import { SubCategoryApi, PriorityApi, ImpactApi, UrgencyApi, AssignmentGroupApi, LocationApi } from "@/lib/api/admin-modules.api";
+import type { Category, SubCategory, Priority, Impact, Urgency, AssignmentGroup, Location } from "@/types/admin";
 
 interface FormState {
   caller: string;
   contactNumber: string;
   emailId: string;
-  category: string;
+  categoryId: number | null;
   summary: string;
-  subCategory: string;
+  subCategoryId: number | null;
   description: string;
-  priority: string;
+  priorityId: number | null;
   affectedAsset: string;
-  location: string;
-  assignmentGroup: string;
-  impact: string;
-  urgency: string;
+  locationId: number | null;
+  assignmentGroupId: number | null;
+  impactId: number | null;
+  urgencyId: number | null;
 }
 
 const MAX_FILE_SIZE_MB = 10;
@@ -71,43 +50,103 @@ const ACCEPTED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".pdf", ".docx"];
 
 export function IncidentForm() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { create } = useIncidents();
-  const { categories } = useAdminCategories();
+
+  // API Data
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
+  const [priorities, setPriorities] = useState<Priority[]>([]);
+  const [impacts, setImpacts] = useState<Impact[]>([]);
+  const [urgencies, setUrgencies] = useState<Urgency[]>([]);
+  const [assignmentGroups, setAssignmentGroups] = useState<AssignmentGroup[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const initialState: FormState = {
+  const [form, setForm] = useState<FormState>({
     caller: user?.fullName ?? "",
     contactNumber: user?.phone ?? "",
     emailId: user?.email ?? "",
-    category: categoryOptions[1].label,
+    categoryId: null,
     summary: "",
-    subCategory: categoryOptions[1].subCategories[0],
+    subCategoryId: null,
     description: "",
-    priority: "Medium",
+    priorityId: null,
     affectedAsset: "",
-    location: "Mumbai",
-    assignmentGroup: assignmentGroupOptions[0],
-    impact: "Medium",
-    urgency: "Medium",
-  };
+    locationId: null,
+    assignmentGroupId: null,
+    impactId: null,
+    urgencyId: null,
+  });
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [form, setForm] = useState<FormState>(initialState);
   const [files, setFiles] = useState<File[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [fileError, setFileError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const subCategories =
-    categoryOptions.find((c) => c.label === form.category)?.subCategories ?? [];
+  // Fetch all dropdown data from backend
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [cats, subs, pris, imps, urgs, groups, locs] = await Promise.all([
+          CategoriesApi.list(),
+          SubCategoryApi.list(),
+          PriorityApi.list(),
+          ImpactApi.list(),
+          UrgencyApi.list(),
+          AssignmentGroupApi.list(),
+          LocationApi.list(),
+        ]);
+        
+        setCategories(cats);
+        setSubCategories(subs);
+        setPriorities(pris);
+        setImpacts(imps);
+        setUrgencies(urgs);
+        setAssignmentGroups(groups);
+        setLocations(locs);
+        
+        // Set default values from first items if available
+        if (cats.length > 0) {
+          setForm((prev) => ({ ...prev, categoryId: cats[0].categoryId }));
+        }
+        if (pris.length > 0) {
+          const mediumPriority = pris.find((p) => p.priorityName.toLowerCase() === "medium");
+          setForm((prev) => ({ ...prev, priorityId: mediumPriority?.priorityId ?? pris[0].priorityId }));
+        }
+        if (imps.length > 0) {
+          const mediumImpact = imps.find((i) => i.impactName.toLowerCase() === "medium");
+          setForm((prev) => ({ ...prev, impactId: mediumImpact?.impactId ?? imps[0].impactId }));
+        }
+        if (urgs.length > 0) {
+          const mediumUrgency = urgs.find((u) => u.urgencyName.toLowerCase() === "medium");
+          setForm((prev) => ({ ...prev, urgencyId: mediumUrgency?.urgencyId ?? urgs[0].urgencyId }));
+        }
+        if (locs.length > 0) {
+          setForm((prev) => ({ ...prev, locationId: locs[0].locationId }));
+        }
+      } catch (error) {
+        console.error("Failed to fetch form data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Filter sub-categories based on selected category
+  const filteredSubCategories = subCategories.filter((sc) => sc.category?.categoryId === form.categoryId);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => {
-      if (key === "category") {
-        const next = categoryOptions.find((c) => c.label === value);
-        return { ...prev, category: value, subCategory: next?.subCategories[0] ?? "" };
+      if (key === "categoryId" && value !== null) {
+        // Reset subCategory when category changes
+        return { ...prev, [key]: value, subCategoryId: null };
       }
       return { ...prev, [key]: value };
     });
@@ -118,10 +157,10 @@ export function IncidentForm() {
     if (!form.caller.trim()) next.caller = "Caller is required.";
     if (!form.summary.trim()) next.summary = "Summary is required.";
     if (!form.description.trim()) next.description = "Description is required.";
-    if (!form.category) next.category = "Category is required.";
-    if (!form.subCategory) next.subCategory = "Sub category is required.";
-    if (!form.priority) next.priority = "Priority is required.";
-    if (!form.location) next.location = "Location is required.";
+    if (!form.categoryId) next.categoryId = "Category is required.";
+    if (!form.subCategoryId) next.subCategoryId = "Sub category is required.";
+    if (!form.priorityId) next.priorityId = "Priority is required.";
+    if (!form.locationId) next.locationId = "Location is required.";
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -159,31 +198,26 @@ export function IncidentForm() {
     e.preventDefault();
     if (!validate()) return;
     setSubmitting(true);
-    
-    // Find the categoryId if a matching one exists in the DB
-    const cat = categories.find((c) => c.categoryName.toLowerCase() === form.category.toLowerCase());
 
-    // Map all the rich form fields into the description so no data is lost
-    const fullDescription = [
-      `Caller: ${form.caller}`,
-      form.contactNumber ? `Contact Number: ${form.contactNumber}` : null,
-      form.emailId ? `Email ID: ${form.emailId}` : null,
-      `Category: ${form.category} (${form.subCategory})`,
-      `Location: ${form.location}`,
-      form.affectedAsset ? `Affected Asset: ${form.affectedAsset}` : null,
-      `Assignment Group: ${form.assignmentGroup}`,
-      `Impact: ${form.impact}`,
-      `Urgency: ${form.urgency}`,
-      ``,
-      `Description:`,
-      form.description
-    ].filter(Boolean).join("\n");
+    // Find display names for logging/info (optional)
+    const categoryName = categories.find((c) => c.categoryId === form.categoryId)?.categoryName;
+    const priorityName = priorities.find((p) => p.priorityId === form.priorityId)?.priorityName;
+    const impactName = impacts.find((i) => i.impactId === form.impactId)?.impactName;
+    const urgencyName = urgencies.find((u) => u.urgencyId === form.urgencyId)?.urgencyName;
+    const locationName = locations.find((l) => l.locationId === form.locationId)?.locationName;
+    const assignmentGroupName = assignmentGroups.find((g) => g.groupId === form.assignmentGroupId)?.groupName;
 
     const newIncident = await create({
       title: form.summary,
-      description: fullDescription,
-      priority: form.priority as "Low" | "Medium" | "High" | "Critical",
-      categoryId: cat?.categoryId,
+      description: form.description,
+      priority: (priorityName as "Low" | "Medium" | "High" | "Critical") || "Medium",
+      impact: (impactName as "Low" | "Medium" | "High") || "Medium",
+      urgency: (urgencyName as "Low" | "Medium" | "High") || "Medium",
+      categoryId: form.categoryId ?? undefined,
+      contactNumber: form.contactNumber,
+      department: locationName || "General",
+      affectedAsset: form.affectedAsset,
+      assignmentGroupId: form.assignmentGroupId ?? undefined,
     });
 
     setSubmitting(false);
@@ -195,7 +229,21 @@ export function IncidentForm() {
   }
 
   function handleReset() {
-    setForm(initialState);
+    setForm({
+      caller: user?.fullName ?? "",
+      contactNumber: user?.phone ?? "",
+      emailId: user?.email ?? "",
+      categoryId: categories.length > 0 ? categories[0].categoryId : null,
+      summary: "",
+      subCategoryId: null,
+      description: "",
+      priorityId: priorities.find((p) => p.priorityName.toLowerCase() === "medium")?.priorityId ?? priorities[0]?.priorityId ?? null,
+      affectedAsset: "",
+      locationId: locations.length > 0 ? locations[0].locationId : null,
+      assignmentGroupId: null,
+      impactId: impacts.find((i) => i.impactName.toLowerCase() === "medium")?.impactId ?? impacts[0]?.impactId ?? null,
+      urgencyId: urgencies.find((u) => u.urgencyName.toLowerCase() === "medium")?.urgencyId ?? urgencies[0]?.urgencyId ?? null,
+    });
     setFiles([]);
     setErrors({});
     setFileError("");
@@ -212,6 +260,14 @@ export function IncidentForm() {
         </span>
         <p className="text-lg font-semibold text-green-800">Incident submitted successfully</p>
         <p className="text-sm text-green-700">Redirecting you to the incident details…</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center rounded-xl border border-slate-200 bg-white p-10">
+        <p className="text-sm text-slate-600">Loading form data...</p>
       </div>
     );
   }
@@ -268,18 +324,19 @@ export function IncidentForm() {
           </Label>
           <Select
             id="category"
-            value={form.category}
-            onChange={(e) => update("category", e.target.value)}
+            value={form.categoryId ?? ""}
+            onChange={(e) => update("categoryId", e.target.value ? Number(e.target.value) : null)}
             leadingIcon={<Grid3x3 />}
-            invalid={!!errors.category}
+            invalid={!!errors.categoryId}
           >
-            {categoryOptions.map((c) => (
-              <option key={c.label} value={c.label}>
-                {c.label}
+            <option value="">Select a category</option>
+            {categories.map((c) => (
+              <option key={c.categoryId} value={c.categoryId}>
+                {c.categoryName}
               </option>
             ))}
           </Select>
-          <FieldError message={errors.category} />
+          <FieldError message={errors.categoryId} />
         </div>
 
         <div>
@@ -302,16 +359,19 @@ export function IncidentForm() {
           </Label>
           <Select
             id="subCategory"
-            value={form.subCategory}
-            onChange={(e) => update("subCategory", e.target.value)}
+            value={form.subCategoryId ?? ""}
+            onChange={(e) => update("subCategoryId", e.target.value ? Number(e.target.value) : null)}
             leadingIcon={<Laptop />}
-            invalid={!!errors.subCategory}
+            invalid={!!errors.subCategoryId}
           >
-            {subCategories.map((s) => (
-              <option key={s}>{s}</option>
+            <option value="">Select a sub category</option>
+            {filteredSubCategories.map((s) => (
+              <option key={s.subCategoryId} value={s.subCategoryId}>
+                {s.subCategoryName}
+              </option>
             ))}
           </Select>
-          <FieldError message={errors.subCategory} />
+          <FieldError message={errors.subCategoryId} />
         </div>
 
         <div>
@@ -334,12 +394,15 @@ export function IncidentForm() {
           </Label>
           <Select
             id="priority"
-            value={form.priority}
-            onChange={(e) => update("priority", e.target.value)}
-            leadingIcon={<PriorityDot priority={form.priority} />}
+            value={form.priorityId ?? ""}
+            onChange={(e) => update("priorityId", e.target.value ? Number(e.target.value) : null)}
+            leadingIcon={<PriorityDot priority={priorities.find((p) => p.priorityId === form.priorityId)?.priorityName ?? ""} />}
           >
-            {priorityOptions.map((p) => (
-              <option key={p}>{p}</option>
+            <option value="">Select priority</option>
+            {priorities.map((p) => (
+              <option key={p.priorityId} value={p.priorityId}>
+                {p.priorityName}
+              </option>
             ))}
           </Select>
         </div>
@@ -353,9 +416,7 @@ export function IncidentForm() {
             leadingIcon={<Laptop />}
           >
             <option value="">Select an asset</option>
-            {assetOptions.map((a) => (
-              <option key={a}>{a}</option>
-            ))}
+            {/* TODO: Fetch asset list from backend */}
           </Select>
         </div>
 
@@ -365,56 +426,73 @@ export function IncidentForm() {
           </Label>
           <Select
             id="location"
-            value={form.location}
-            onChange={(e) => update("location", e.target.value)}
+            value={form.locationId ?? ""}
+            onChange={(e) => update("locationId", e.target.value ? Number(e.target.value) : null)}
             leadingIcon={<MapPin />}
-            invalid={!!errors.location}
+            invalid={!!errors.locationId}
           >
-            {locationOptions.map((l) => (
-              <option key={l}>{l}</option>
+            <option value="">Select a location</option>
+            {locations.map((l) => (
+              <option key={l.locationId} value={l.locationId}>
+                {l.locationName}
+              </option>
             ))}
           </Select>
-          <FieldError message={errors.location} />
+          <FieldError message={errors.locationId} />
         </div>
 
         <div>
           <Label htmlFor="impact">Impact</Label>
           <Select
             id="impact"
-            value={form.impact}
-            onChange={(e) => update("impact", e.target.value)}
+            value={form.impactId ?? ""}
+            onChange={(e) => update("impactId", e.target.value ? Number(e.target.value) : null)}
             leadingIcon={<Activity />}
           >
-            {impactOptions.map((i) => (
-              <option key={i}>{i}</option>
+            <option value="">Select impact</option>
+            {impacts.map((i) => (
+              <option key={i.impactId} value={i.impactId}>
+                {i.impactName}
+              </option>
             ))}
           </Select>
         </div>
 
-        <div>
-          <Label htmlFor="assignmentGroup">Assignment Group</Label>
-          <Select
-            id="assignmentGroup"
-            value={form.assignmentGroup}
-            onChange={(e) => update("assignmentGroup", e.target.value)}
-            leadingIcon={<Users />}
-          >
-            {assignmentGroupOptions.map((g) => (
-              <option key={g}>{g}</option>
-            ))}
-          </Select>
-        </div>
+        {isAdmin && (
+          <div>
+            <Label htmlFor="assignmentGroup">Assignment Group</Label>
+            <Select
+              id="assignmentGroup"
+              value={form.assignmentGroupId ?? ""}
+              onChange={(e) => update("assignmentGroupId", e.target.value ? Number(e.target.value) : null)}
+              leadingIcon={<Users />}
+            >
+              <option value="">Select an assignment group</option>
+              {assignmentGroups.map((g) => (
+                <option key={g.groupId} value={g.groupId}>
+                  {g.groupName}
+                </option>
+              ))}
+            </Select>
+            <p className="mt-1 text-xs text-slate-500">
+              Only Admins/Fulfillers can set the group at creation. Otherwise it is assigned after the incident is logged.
+            </p>
+          </div>
+        )}
 
         <div>
           <Label htmlFor="urgency">Urgency</Label>
           <Select
             id="urgency"
-            value={form.urgency}
-            onChange={(e) => update("urgency", e.target.value)}
+            value={form.urgencyId ?? ""}
+            onChange={(e) => update("urgencyId", e.target.value ? Number(e.target.value) : null)}
             leadingIcon={<Clock />}
           >
-            {urgencyOptions.map((u) => (
-              <option key={u}>{u}</option>
+            <option value="">Select urgency</option>
+            {urgencies.map((u) => (
+              <option key={u.urgencyId} value={u.urgencyId}>
+                {u.urgencyName}
+              </option>
             ))}
           </Select>
         </div>

@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 
 export default function NotificationsPage() {
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="w-full">
       <Breadcrumb items={[{ label: "Home", href: "/home" }, { label: "Notifications" }]} />
       <div className="flex items-center gap-2">
         <Bell className="size-6 text-brand-600" aria-hidden="true" />

@@ -34,13 +34,13 @@ export function useAdminUsers() {
 
   const create = useCallback(async (body: CreateUserDto) => {
     try {
-      await UsersApi.create(body);
+      const created = await UsersApi.create(body);
       toast({ title: "User created", variant: "success" });
       await fetch();
-      return true;
+      return created;
     } catch (e: unknown) {
       toast({ title: "Error", description: msg(e), variant: "error" });
-      return false;
+      return null;
     }
   }, [fetch, toast]);
 

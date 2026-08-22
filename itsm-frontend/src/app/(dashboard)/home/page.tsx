@@ -15,12 +15,13 @@ import { Pagination } from "@/components/ui/pagination";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { useIncidents } from "@/lib/hooks/use-incidents";
 import { PageSpinner } from "@/components/ui/spinner";
+import { AnalystDashboard } from "@/components/dashboard/analyst-dashboard";
 
 const PAGE_SIZE = 5;
 
 export default function HomePage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isAnalyst } = useAuth();
   const { incidents, isLoading } = useIncidents("mine");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -36,8 +37,10 @@ export default function HomePage() {
     if (query.trim()) router.push(`/incidents?q=${encodeURIComponent(query.trim())}`);
   }
 
+  // Everyone sees the requester-oriented home page by default.
+
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="w-full">
       <h1 className="text-2xl font-bold text-slate-900">
         Hi, {user?.fullName ?? "there"}! <span aria-hidden="true">👋</span>
       </h1>

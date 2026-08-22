@@ -20,18 +20,20 @@ export class ApprovalsService {
   /** Approvals screen: requests currently waiting on a step whose approverRole the user holds. */
   async findPendingForUser(userId: number): Promise<ServiceRequest[]> {
     const userRoleNames = await this.rolesService.getRoleNamesForUser(userId);
+    if (!userRoleNames.length) {
+      return [];
+    }
 
-    const inProgress = await this.requestsRepo.find({
-      where: { status: "In Progress" },
-      relations: { catalog: true, requestedBy: true, currentStep: { approverRole: true } },
-      order: { createdAt: "ASC" },
-    });
-
-    return inProgress.filter(
-      (r) =>
-        r.currentStep?.approverRole &&
-        userRoleNames.includes(r.currentStep.approverRole.roleName)
-    );
+    return this.requestsRepo
+      .createQueryBuilder("request")
+      .leftJoinAndSelect("request.catalog", "catalog")
+      .leftJoinAndSelect("request.requestedBy", "requestedBy")
+      .leftJoinAndSelect("request.currentStep", "currentStep")
+      .leftJoinAndSelect("currentStep.approverRole", "approverRole")
+      .where("request.status = :status", { status: "In Progress" })
+      .andWhere("approverRole.roleName IN (:...roleNames)", { roleNames: userRoleNames })
+      .orderBy("request.createdAt", "ASC")
+      .getMany();
   }
 
   async act(

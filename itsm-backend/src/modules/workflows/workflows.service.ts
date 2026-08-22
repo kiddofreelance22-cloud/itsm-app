@@ -77,11 +77,11 @@ export class WorkflowsService {
       throw new NotFoundException(`Workflow ${workflowId} not found`);
     }
 
-    let approverRole: Role | null = null;
+    let approverRole: Role | undefined;
     if (dto.approverRoleId) {
       approverRole = await this.rolesRepo.findOne({
         where: { roleId: dto.approverRoleId },
-      });
+      }) ?? undefined;
       if (!approverRole) {
         throw new NotFoundException(`Role ${dto.approverRoleId} not found`);
       }
@@ -92,8 +92,8 @@ export class WorkflowsService {
       stepName: dto.stepName,
       stepOrder: dto.stepOrder,
       stepType: dto.stepType as any,
-      approverRole,
     });
+    if (approverRole) step.approverRole = approverRole;
     return this.stepsRepo.save(step);
   }
 

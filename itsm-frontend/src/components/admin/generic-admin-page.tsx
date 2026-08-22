@@ -131,7 +131,7 @@ export function GenericAdminPage<T extends object>({
   ];
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="w-full">
       <Breadcrumb items={breadcrumbs} />
       <PageHeader title={title} description={description}
         action={

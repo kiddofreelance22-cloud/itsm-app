@@ -17,4 +17,6 @@ export class AssignmentGroupController {
   @Get(":id") findOne(@Param("id", ParseIntPipe) id: number) { return this.svc.findOne(id); }
   @Patch(":id") @Roles("Admin") update(@Param("id", ParseIntPipe) id: number, @Body() dto: UpdateAssignmentGroupDto) { return this.svc.update(id, dto); }
   @Delete(":id") @Roles("Admin") remove(@Param("id", ParseIntPipe) id: number) { return this.svc.remove(id); }
+  @Post(":id/members/:userId") @Roles("Admin") addMember(@Param("id", ParseIntPipe) id: number, @Param("userId", ParseIntPipe) userId: number) { return this.svc.addMember(id, userId); }
+  @Delete(":id/members/:userId") @Roles("Admin") removeMember(@Param("id", ParseIntPipe) id: number, @Param("userId", ParseIntPipe) userId: number) { return this.svc.removeMember(id, userId); }
 }

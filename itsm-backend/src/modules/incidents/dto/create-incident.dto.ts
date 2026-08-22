@@ -1,33 +1,24 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsIn, IsInt, IsOptional, IsString } from "class-validator";
-
-const PRIORITIES = ["Low", "Medium", "High", "Critical"] as const;
+import { IsInt, IsOptional, IsString } from "class-validator";
 
 export class CreateIncidentDto {
-  @ApiProperty({ example: "Laptop won't power on" })
-  @IsString()
-  title: string;
+  @ApiProperty({ example: "Outlook Error" })
+  @IsString() title: string;
 
-  @ApiPropertyOptional({ example: "Tried a different charger, still no response." })
-  @IsOptional()
-  @IsString()
-  description?: string;
-
-  @ApiPropertyOptional({ example: 4 })
-  @IsOptional()
-  @IsInt()
-  categoryId?: number;
-
-  @ApiPropertyOptional({ example: "Medium", enum: PRIORITIES, default: "Medium" })
-  @IsOptional()
-  @IsIn(PRIORITIES)
-  priority?: (typeof PRIORITIES)[number];
-
-  @ApiPropertyOptional({
-    example: 12,
-    description: "Optional link back to the originating service request",
-  })
-  @IsOptional()
-  @IsInt()
-  requestId?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
+  @ApiPropertyOptional() @IsOptional() @IsInt() categoryId?: number;
+  @ApiPropertyOptional() @IsOptional() @IsInt() subCategoryId?: number;
+  @ApiPropertyOptional({ description: "Priority name — any value configured in Admin > Priority" })
+  @IsOptional() @IsString() priority?: string;
+  @ApiPropertyOptional({ description: "Impact level — any value configured in Admin > Impact" })
+  @IsOptional() @IsString() impact?: string;
+  @ApiPropertyOptional({ description: "Urgency level — any value configured in Admin > Urgency" })
+  @IsOptional() @IsString() urgency?: string;
+  @ApiPropertyOptional() @IsOptional() @IsInt() assignmentGroupId?: number;
+  @ApiPropertyOptional() @IsOptional() @IsInt() locationId?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() affectedAsset?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() businessService?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() contactNumber?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() department?: string;
+  @ApiPropertyOptional() @IsOptional() @IsInt() requestId?: number;
 }

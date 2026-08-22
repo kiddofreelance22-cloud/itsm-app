@@ -8,11 +8,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen bg-slate-50 flex flex-col">
       <Navbar onMenuClick={() => setMobileNavOpen(true)} />
-      <div className="flex">
+      <div className="flex flex-1 overflow-hidden">
         <Sidebar open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
-        <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+        <main className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-5">
+          {children}
+        </main>
       </div>
     </div>
   );

@@ -57,7 +57,7 @@ export default function AdminCategoriesPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="w-full">
       <Breadcrumb items={[{ label: "Home", href: "/home" }, { label: "Admin" }, { label: "Categories" }]} />
       <PageHeader title="Categories" description="Organize catalog items and incidents into categories."
         action={

@@ -10,20 +10,20 @@ import { WorkflowStep } from "./workflow-step.entity";
 @Entity("workflows")
 export class Workflow {
   @PrimaryGeneratedColumn({ name: "workflow_id" })
-  workflowId: number;
+  workflowId!: number;
 
   @Column({ name: "workflow_name" })
-  workflowName: string;
+  workflowName!: string;
 
   @Column({ nullable: true })
-  description: string;
+  description!: string;
 
   @Column({ name: "is_active", default: true })
-  isActive: boolean;
+  isActive!: boolean;
 
   @CreateDateColumn({ name: "created_at" })
-  createdAt: Date;
+  createdAt!: Date;
 
   @OneToMany(() => WorkflowStep, (step) => step.workflow, { cascade: true })
-  steps: WorkflowStep[];
+  steps!: WorkflowStep[];
 }

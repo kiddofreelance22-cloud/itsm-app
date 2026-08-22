@@ -21,26 +21,26 @@ export type RequestHistoryAction =
 @Entity("request_history")
 export class RequestHistory {
   @PrimaryGeneratedColumn({ name: "history_id" })
-  historyId: number;
+  historyId!: number;
 
   @ManyToOne(() => ServiceRequest, { onDelete: "CASCADE" })
   @JoinColumn({ name: "request_id" })
-  request: ServiceRequest;
+  request!: ServiceRequest;
 
   @ManyToOne(() => WorkflowStep, { nullable: true, onDelete: "SET NULL" })
   @JoinColumn({ name: "workflow_step_id" })
-  workflowStep: WorkflowStep | null;
+  workflowStep?: WorkflowStep;
 
   @Column()
-  action: RequestHistoryAction;
+  action!: RequestHistoryAction;
 
   @ManyToOne(() => User, { onDelete: "RESTRICT" })
   @JoinColumn({ name: "action_by" })
-  actionBy: User;
+  actionBy!: User;
 
   @Column({ type: "text", nullable: true })
-  comments: string;
+  comments?: string;
 
   @CreateDateColumn({ name: "action_at" })
-  actionAt: Date;
+  actionAt!: Date;
 }

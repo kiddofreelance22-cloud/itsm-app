@@ -1,61 +1,90 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Trash2, ShieldCheck, UserX } from "lucide-react";
+import Link from "next/link";
+import { Plus, Pencil, Trash2, ShieldCheck, UserX, Eye } from "lucide-react";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
 import { DataTable, Column } from "@/components/admin/data-table";
-import { UserFormDialog } from "@/components/admin/user-form-dialog";
 import { RoleAssignDialog } from "@/components/admin/role-assign-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useAdminUsers, useAdminRoles } from "@/lib/hooks/use-admin";
 import { AdminUser } from "@/types/admin";
 
 export default function AdminUsersPage() {
-  const { users, isLoading, create, update, remove, deactivate, refetch } = useAdminUsers();
+  const { users, isLoading, remove, deactivate, refetch } = useAdminUsers();
   const { roles, assign, unassign } = useAdminRoles();
 
-  const [userDialog, setUserDialog] = useState(false);
-  const [editUser, setEditUser] = useState<AdminUser | null>(null);
-  const [roleUser, setRoleUser] = useState<AdminUser | null>(null);
+  const [roleUser,   setRoleUser]   = useState<AdminUser | null>(null);
   const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
-  const [saving, setSaving] = useState(false);
 
   const columns: Column<AdminUser>[] = [
-    { key: "fullName", label: "Name", sortable: true,
-      render: (u) => <span className="font-medium">{u.fullName}</span> },
-    { key: "username", label: "Username", sortable: true },
-    { key: "email", label: "Email", sortable: true },
-    { key: "userRoles", label: "Roles",
+    {
+      key: "fullName", label: "Name", sortable: true,
       render: (u) => (
-        <div className="flex flex-wrap gap-1">
-          {(u.userRoles ?? []).length === 0
-            ? <span className="text-slate-400 text-xs">No roles</span>
-            : (u.userRoles ?? []).map((ur) => (
-                <span key={ur.role.roleId} className="text-xs bg-blue-100 text-blue-700 rounded-full px-2 py-0.5">
-                  {ur.role.roleName}
-                </span>
-              ))}
+        <div className="flex items-center gap-3">
+          <div className="size-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold shrink-0">
+            {u.fullName.charAt(0).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="font-medium text-slate-800 truncate">{u.fullName}</p>
+            {u.jobTitle && <p className="text-xs text-slate-400 truncate">{u.jobTitle}</p>}
+          </div>
         </div>
       ),
     },
-    { key: "isActive", label: "Status",
+    { key: "username", label: "Username", sortable: true,
+      render: (u) => <span className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">{u.username}</span> },
+    { key: "email", label: "Email", sortable: true },
+    {
+      key: "primaryRole", label: "Role",
       render: (u) => (
-        <span className={`text-xs rounded-full px-2 py-0.5 ${u.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+        <div className="flex flex-wrap gap-1">
+          {u.primaryRole
+            ? <span className="text-xs bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 rounded-full px-2 py-0.5">{u.primaryRole.roleName}</span>
+            : (u.userRoles ?? []).length > 0
+              ? (u.userRoles ?? []).map((ur) => (
+                  <span key={ur.role.roleId} className="text-xs bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 rounded-full px-2 py-0.5">
+                    {ur.role.roleName}
+                  </span>
+                ))
+              : <span className="text-slate-400 text-xs">No role</span>}
+        </div>
+      ),
+    },
+    {
+      key: "assignmentGroup", label: "Group",
+      render: (u) => u.assignmentGroup
+        ? <span className="text-xs text-slate-600">{u.assignmentGroup.groupName}</span>
+        : <span className="text-slate-300 text-xs">—</span>,
+    },
+    {
+      key: "isActive", label: "Status",
+      render: (u) => (
+        <span className={`text-xs rounded-full px-2.5 py-0.5 font-medium ring-1 ring-inset ${
+          u.isActive
+            ? "bg-green-50 text-green-700 ring-green-200"
+            : "bg-slate-50 text-slate-500 ring-slate-200"
+        }`}>
           {u.isActive ? "Active" : "Inactive"}
         </span>
       ),
     },
-    { key: "actions", label: "",
+    {
+      key: "actions", label: "",
       render: (u) => (
         <div className="flex items-center gap-1">
-          <button onClick={() => { setEditUser(u); setUserDialog(true); }}
-            className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-blue-600" title="Edit">
+          <Link href={`/admin/users/${u.userId}`}
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-brand-600" title="View">
+            <Eye className="size-3.5" />
+          </Link>
+          <Link href={`/admin/users/${u.userId}/edit`}
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-brand-600" title="Edit">
             <Pencil className="size-3.5" />
-          </button>
+          </Link>
           <button onClick={() => setRoleUser(u)}
-            className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-blue-600" title="Manage Roles">
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-brand-600" title="Manage Roles">
             <ShieldCheck className="size-3.5" />
           </button>
           <button onClick={() => deactivate(u.userId)}
@@ -72,33 +101,25 @@ export default function AdminUsersPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="w-full">
       <Breadcrumb items={[{ label: "Home", href: "/home" }, { label: "Admin" }, { label: "Users" }]} />
-      <PageHeader title="Users" description="Manage system users and their roles."
+      <PageHeader
+        title="Users Management"
+        description="Manage system users, their roles, and access permissions."
         action={
-          <Button onClick={() => { setEditUser(null); setUserDialog(true); }} className="gap-1.5">
-            <Plus className="size-4" /> Add User
+          <Button asChild className="gap-1.5">
+            <Link href="/admin/users/create">
+              <Plus className="size-4" /> Add User
+            </Link>
           </Button>
         }
       />
       <DataTable
         columns={columns} data={users} isLoading={isLoading}
-        rowKey={(u) => u.userId} searchKeys={["fullName", "username", "email"]}
-        searchPlaceholder="Search users..." emptyText="No users found."
-      />
-
-      <UserFormDialog
-        open={userDialog} user={editUser} isLoading={saving}
-        onSubmit={async (data) => {
-          setSaving(true);
-          const ok = editUser
-            ? await update(editUser.userId, data)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            : await create(data as any);
-          setSaving(false);
-          return !!ok;
-        }}
-        onClose={() => { setUserDialog(false); setEditUser(null); }}
+        rowKey={(u) => u.userId}
+        searchKeys={["fullName", "username", "email"]}
+        searchPlaceholder="Search by name, username or email..."
+        emptyText="No users found."
       />
 
       <RoleAssignDialog
@@ -107,8 +128,7 @@ export default function AdminUsersPage() {
           const ok = await assign(uid, rid);
           if (ok) {
             const latestUsers = await refetch();
-            const updated = latestUsers?.find((u) => u.userId === uid) ?? null;
-            setRoleUser(updated);
+            setRoleUser(latestUsers?.find((u) => u.userId === uid) ?? null);
           }
           return !!ok;
         }}
@@ -116,8 +136,7 @@ export default function AdminUsersPage() {
           const ok = await unassign(uid, rid);
           if (ok) {
             const latestUsers = await refetch();
-            const updated = latestUsers?.find((u) => u.userId === uid) ?? null;
-            setRoleUser(updated);
+            setRoleUser(latestUsers?.find((u) => u.userId === uid) ?? null);
           }
           return !!ok;
         }}
@@ -127,7 +146,7 @@ export default function AdminUsersPage() {
       <ConfirmDialog
         open={!!deleteUser}
         title={`Delete ${deleteUser?.fullName}?`}
-        description="This action cannot be undone."
+        description="This action cannot be undone. All associated data will be permanently removed."
         confirmLabel="Delete" variant="danger"
         onConfirm={async () => { if (deleteUser) { await remove(deleteUser.userId); setDeleteUser(null); } }}
         onCancel={() => setDeleteUser(null)}

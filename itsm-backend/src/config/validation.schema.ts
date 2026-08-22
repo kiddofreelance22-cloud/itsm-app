@@ -27,6 +27,7 @@ export const validationSchema = Joi.object({
   SMTP_SECURE: Joi.boolean().default(false),
   SMTP_USER: Joi.string().optional(),
   SMTP_PASSWORD: Joi.string().optional(),
+  SMTP_PASS: Joi.string().optional(),
   SMTP_FROM_NAME: Joi.string().default("ITSM Support"),
   SMTP_FROM_ADDRESS: Joi.string().email().optional(),
 });

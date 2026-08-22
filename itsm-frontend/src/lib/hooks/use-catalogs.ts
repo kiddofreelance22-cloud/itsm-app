@@ -1,145 +1,118 @@
 "use client";
+
 import { useState, useEffect, useCallback } from "react";
 import { CatalogsApi, CreateCatalogDto, CreateVariableDto } from "@/lib/api/catalogs.api";
-import { Catalog, CatalogVariable } from "@/types/catalog";
+import { Catalog } from "@/types/catalog";
 import { useToast } from "./use-toast";
 
 export function useCatalogs(mode: "active" | "all" = "active") {
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const fetch = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
-    setError(null);
     try {
-      const data =
-        mode === "active"
-          ? await CatalogsApi.listActive()
-          : await CatalogsApi.listAll();
+      const data = mode === "all"
+        ? await CatalogsApi.listAll()
+        : await CatalogsApi.listActive();
       setCatalogs(data);
-    } catch (e: unknown) {
-      setError((e instanceof Error ? e.message : String(e)));
+    } catch (e) {
+      console.error("Failed to load catalogs", e);
     } finally {
       setIsLoading(false);
     }
   }, [mode]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  const create = useCallback(
-    async (body: CreateCatalogDto): Promise<Catalog | null> => {
-      try {
-        const catalog = await CatalogsApi.create(body);
-        toast({ title: "Catalog created", variant: "success" });
-        await fetch();
-        return catalog;
-      } catch (e: unknown) {
-        toast({ title: "Error", description: (e instanceof Error ? e.message : String(e)), variant: "error" });
-        return null;
-      }
-    },
-    [fetch, toast]
-  );
+  const create = useCallback(async (body: CreateCatalogDto): Promise<Catalog | null> => {
+    try {
+      const catalog = await CatalogsApi.create(body);
+      toast({ title: "Catalog item created", variant: "success" });
+      await fetchData();
+      return catalog;
+    } catch (e: unknown) {
+      toast({ title: "Error", description: (e instanceof Error ? e.message : String(e)), variant: "error" });
+      return null;
+    }
+  }, [fetchData, toast]);
 
-  const update = useCallback(
-    async (id: number, body: Partial<CreateCatalogDto>): Promise<boolean> => {
-      try {
-        await CatalogsApi.update(id, body);
-        toast({ title: "Catalog updated", variant: "success" });
-        await fetch();
-        return true;
-      } catch (e: unknown) {
-        toast({ title: "Error", description: (e instanceof Error ? e.message : String(e)), variant: "error" });
-        return false;
-      }
-    },
-    [fetch, toast]
-  );
+  const update = useCallback(async (id: number, body: Partial<CreateCatalogDto>): Promise<boolean> => {
+    try {
+      await CatalogsApi.update(id, body);
+      toast({ title: "Catalog item saved", variant: "success" });
+      await fetchData();
+      return true;
+    } catch (e: unknown) {
+      toast({ title: "Error", description: (e instanceof Error ? e.message : String(e)), variant: "error" });
+      return false;
+    }
+  }, [fetchData, toast]);
 
-  const remove = useCallback(
-    async (id: number): Promise<boolean> => {
-      try {
-        await CatalogsApi.remove(id);
-        toast({ title: "Catalog deleted", variant: "success" });
-        await fetch();
-        return true;
-      } catch (e: unknown) {
-        toast({ title: "Error", description: (e instanceof Error ? e.message : String(e)), variant: "error" });
-        return false;
-      }
-    },
-    [fetch, toast]
-  );
+  const remove = useCallback(async (id: number): Promise<boolean> => {
+    try {
+      await CatalogsApi.remove(id);
+      toast({ title: "Catalog item deleted", variant: "success" });
+      await fetchData();
+      return true;
+    } catch (e: unknown) {
+      toast({ title: "Error", description: (e instanceof Error ? e.message : String(e)), variant: "error" });
+      return false;
+    }
+  }, [fetchData, toast]);
 
-  return { catalogs, isLoading, error, refetch: fetch, create, update, remove };
+  return { catalogs, isLoading, refetch: fetchData, create, update, remove };
 }
 
-export function useCatalog(id: number) {
+export function useCatalog(catalogId: number) {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const fetch = useCallback(async () => {
+  const fetchData = useCallback(async () => {
+    if (!catalogId) return;
     setIsLoading(true);
     try {
-      const data = await CatalogsApi.getOne(id);
+      const data = await CatalogsApi.getOne(catalogId);
       setCatalog(data);
-    } catch (e: unknown) {
-      setError((e instanceof Error ? e.message : String(e)));
+    } catch (e) {
+      console.error("Failed to load catalog", e);
     } finally {
       setIsLoading(false);
     }
-  }, [id]);
+  }, [catalogId]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  const createVar = useCallback(
-    async (body: CreateVariableDto): Promise<CatalogVariable | null> => {
-      try {
-        const v = await CatalogsApi.createVar(id, body);
-        toast({ title: "Field added", variant: "success" });
-        await fetch();
-        return v;
-      } catch (e: unknown) {
-        toast({ title: "Error", description: (e instanceof Error ? e.message : String(e)), variant: "error" });
-        return null;
-      }
-    },
-    [id, fetch, toast]
-  );
+  const createVar = useCallback(async (body: CreateVariableDto) => {
+    try {
+      await CatalogsApi.createVar(catalogId, body);
+      toast({ title: "Variable added", variant: "success" });
+      await fetchData();
+    } catch (e: unknown) {
+      toast({ title: "Error", description: (e instanceof Error ? e.message : String(e)), variant: "error" });
+    }
+  }, [catalogId, fetchData, toast]);
 
-  const updateVar = useCallback(
-    async (vid: number, body: Partial<CreateVariableDto>): Promise<boolean> => {
-      try {
-        await CatalogsApi.updateVar(id, vid, body);
-        await fetch();
-        return true;
-      } catch (e: unknown) {
-        toast({ title: "Error", description: (e instanceof Error ? e.message : String(e)), variant: "error" });
-        return false;
-      }
-    },
-    [id, fetch, toast]
-  );
+  const updateVar = useCallback(async (variableId: number, body: Partial<CreateVariableDto>) => {
+    try {
+      await CatalogsApi.updateVar(catalogId, variableId, body);
+      await fetchData();
+    } catch (e: unknown) {
+      toast({ title: "Error", description: (e instanceof Error ? e.message : String(e)), variant: "error" });
+    }
+  }, [catalogId, fetchData, toast]);
 
-  const removeVar = useCallback(
-    async (vid: number): Promise<boolean> => {
-      try {
-        await CatalogsApi.removeVar(id, vid);
-        toast({ title: "Field removed", variant: "success" });
-        await fetch();
-        return true;
-      } catch (e: unknown) {
-        toast({ title: "Error", description: (e instanceof Error ? e.message : String(e)), variant: "error" });
-        return false;
-      }
-    },
-    [id, fetch, toast]
-  );
+  const removeVar = useCallback(async (variableId: number) => {
+    try {
+      await CatalogsApi.removeVar(catalogId, variableId);
+      toast({ title: "Variable removed", variant: "success" });
+      await fetchData();
+    } catch (e: unknown) {
+      toast({ title: "Error", description: (e instanceof Error ? e.message : String(e)), variant: "error" });
+    }
+  }, [catalogId, fetchData, toast]);
 
-  return { catalog, isLoading, error, refetch: fetch, createVar, updateVar, removeVar };
+  return { catalog, isLoading, refetch: fetchData, createVar, updateVar, removeVar };
 }
-

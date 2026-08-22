@@ -12,32 +12,32 @@ import { RolePermission } from "./role-permission.entity";
 @Entity("roles")
 export class Role {
   @PrimaryGeneratedColumn({ name: "role_id" })
-  roleId: number;
+  roleId!: number;
 
   @Column({ name: "role_name", unique: true })
-  roleName: string;
+  roleName!: string;
 
   @Column({ name: "role_code", unique: true, nullable: true })
-  roleCode: string;
+  roleCode!: string;
 
   @Column({ type: "jsonb", default: {} })
-  permissions: Record<string, any>;
+  permissions!: Record<string, any>;
 
   @Column({ nullable: true })
-  description: string;
+  description!: string;
 
   @Column({ name: "is_active", default: true })
-  isActive: boolean;
+  isActive!: boolean;
 
   @CreateDateColumn({ name: "created_at" })
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn({ name: "updated_at" })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @OneToMany(() => UserRole, (userRole) => userRole.role)
-  userRoles: UserRole[];
+  userRoles!: UserRole[];
 
   @OneToMany(() => RolePermission, (rp) => rp.role)
-  rolePermissions: RolePermission[];
+  rolePermissions!: RolePermission[];
 }

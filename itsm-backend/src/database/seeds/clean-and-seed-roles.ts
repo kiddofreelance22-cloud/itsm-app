@@ -9,7 +9,23 @@ export async function cleanAndSeedRoles(dataSource: DataSource): Promise<void> {
   try {
     await queryRunner.connect();
 
-    console.log("Deleting all users and user_roles...");
+    console.log("Deleting dependent data (incidents, requests, etc)...");
+    // Delete incidents first (they reference users and other tables)
+    await queryRunner.query(`DELETE FROM "incidents"`);
+    // Delete requests and related data
+    await queryRunner.query(`DELETE FROM "request_history"`);
+    await queryRunner.query(`DELETE FROM "request_variable_values"`);
+    await queryRunner.query(`DELETE FROM "requests"`);
+    // Delete comments
+    await queryRunner.query(`DELETE FROM "incident_comments"`);
+    // Delete tasks
+    await queryRunner.query(`DELETE FROM "tasks"`);
+    // Delete assignment group members
+    await queryRunner.query(`DELETE FROM "assignment_group_members"`);
+    // Delete catalogs and variables
+    await queryRunner.query(`DELETE FROM "catalog_variable_options"`);
+    await queryRunner.query(`DELETE FROM "catalog_variables"`);
+    await queryRunner.query(`DELETE FROM "catalogs"`);
     // Delete user_roles first (foreign key constraint)
     await queryRunner.query(`DELETE FROM "user_roles"`);
     // Delete users

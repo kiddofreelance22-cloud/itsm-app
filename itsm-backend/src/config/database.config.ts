@@ -15,7 +15,7 @@ export const buildDatabaseConfig = (
   password: config.get<string>("database.password"),
   database: config.get<string>("database.name"),
   entities: [__dirname + "/../modules/**/entities/*.entity{.ts,.js}"],
-  synchronize: true, // schema changes go through migrations only, always
+  synchronize: false, // schema changes go through migrations only, always
   autoLoadEntities: true,
   logging: config.get<string>("env") === "development",
 });

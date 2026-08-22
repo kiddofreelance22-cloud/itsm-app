@@ -15,7 +15,7 @@ type AuthUser = LoginResponse["user"];
 
 // Where each role lands after a successful login.
 // Update these two paths if your route names differ.
-const ADMIN_HOME = "/admin/users";
+const ADMIN_HOME = "/home";
 const USER_HOME = "/home";
 
 interface AuthContextValue {
@@ -23,6 +23,11 @@ interface AuthContextValue {
   isLoading: boolean;
   isAdmin: boolean;
   isApprover: boolean;
+  isAgent: boolean;
+  isManager: boolean;
+  isServiceDesk: boolean;
+  isRequester: boolean;
+  isAnalyst: boolean;
   login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
   logout: () => void;
 }
@@ -68,9 +73,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = user?.roles.some((role) => ["Admin", "Administrator"].includes(role)) ?? false;
   const isApprover =
     user?.roles.some((role) => ["Approver", "Admin", "Administrator"].includes(role)) ?? false;
+  const isAgent = user?.roles.some((role) => ["IT Agent", "Engineer"].includes(role)) ?? false;
+  const isManager = user?.roles.some((role) => ["IT Manager"].includes(role)) ?? false;
+  const isServiceDesk = user?.roles.some((role) => ["Service Desk"].includes(role)) ?? false;
+  const isEndUser = user?.roles.some((role) => ["End User", "Requester"].includes(role)) ?? false;
+  // "Analyst workspace" (queue, analyst dashboard, resolve actions) applies to anyone who
+  // works tickets rather than just raising them.
+  const isAnalyst = isAgent || isManager || isServiceDesk || isApprover;
+  const isRequester = !isAnalyst && !isAdmin;
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAdmin, isApprover, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isLoading,
+        isAdmin,
+        isApprover,
+        isAgent,
+        isManager,
+        isServiceDesk,
+        isRequester,
+        isAnalyst,
+        login,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

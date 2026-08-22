@@ -25,7 +25,7 @@ export default () => ({
     port: parseInt(process.env.SMTP_PORT || "587", 10),
     secure: process.env.SMTP_SECURE === "true", // true for port 465, false for 587/25
     user: process.env.SMTP_USER,
-    password: process.env.SMTP_PASSWORD,
+    password: process.env.SMTP_PASSWORD || process.env.SMTP_PASS,
     fromName: process.env.SMTP_FROM_NAME || "ITSM Support",
     fromAddress: process.env.SMTP_FROM_ADDRESS || process.env.SMTP_USER,
   },

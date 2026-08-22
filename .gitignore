@@ -11,6 +11,11 @@ coverage/
 # Environment files
 .env
 .env.*
+env.backend
+env.db
+env.frontend
+*.tar
+*.zip
 !.env.example
 **/.env
 **/.env.*

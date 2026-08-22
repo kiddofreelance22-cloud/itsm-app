@@ -1,18 +1,73 @@
-version: "3.8"
+# ─── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  itsm_net:
+    driver: bridge
 
-services:
-  postgres:
-    image: postgres:18
-    container_name: itsm_postgres
-    restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: admin
-      POSTGRES_DB: itsm_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
+# ─── Volumes ───────────────────────────────────────────────────────────────────
 volumes:
-  pgdata:
+  postgres_data:
+    driver: local
+
+# ─── Services ──────────────────────────────────────────────────────────────────
+services:
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: itsm_postgres
+    restart: unless-stopped
+    env_file:
+      - env.db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432" # expose to host for local tools (DBeaver, psql)
+    networks:
+      - itsm_net
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── Backend (NestJS) ──────────────────────────────────────────────────────
+  backend:
+    image: itsm-app-backend:latest
+    container_name: itsm_backend
+    restart: unless-stopped
+    env_file:
+      - env.backend
+    ports:
+      - "4000:4000"
+    networks:
+      - itsm_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://127.0.0.1:4000/api/docs-json > /dev/null || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ── Frontend (Next.js) ────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./itsm-frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://50.6.45.238:4000}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-http://50.6.45.238:4000}
+    image: itsm-app-frontend:latest
+    container_name: itsm_frontend
+    restart: unless-stopped
+    env_file:
+      - env.frontend
+    ports:
+      - "3000:3000"
+    networks:
+      - itsm_net
+    depends_on:
+      backend:
+        condition: service_healthy

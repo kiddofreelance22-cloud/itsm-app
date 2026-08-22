@@ -8,7 +8,8 @@ import { Column } from "@/components/admin/data-table";
 const columns: Column<Priority>[] = [
   { key: "priorityName", label: "Priority Name", sortable: true, render: (r) => <span className="font-medium">{r.priorityName}</span> },
   { key: "priorityCode", label: "Priority Code", render: (r) => <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">{r.priorityCode}</code> },
-  { key: "description", label: "Description", render: (r) => <span className="text-slate-500 text-sm">{r.description ?? "—"}</span> },
+  { key: "responseSlaMinutes", label: "Response SLA", render: (r) => <span className="text-slate-500 text-sm">{r.responseSlaMinutes ? `${r.responseSlaMinutes} min` : "—"}</span> },
+  { key: "resolutionSlaMinutes", label: "Resolution SLA", render: (r) => <span className="text-slate-500 text-sm">{r.resolutionSlaMinutes ? `${r.resolutionSlaMinutes} min` : "—"}</span> },
   { key: "order", label: "Order", sortable: true, render: (r) => <span className="text-slate-500">{r.order}</span> },
 ];
 
@@ -28,6 +29,8 @@ export default function AdminPriorityPage() {
         { key: "priorityName", label: "Priority Name", placeholder: "e.g. High" },
         { key: "priorityCode", label: "Priority Code", placeholder: "e.g. HIGH" },
         { key: "description", label: "Description", type: "textarea", required: false, placeholder: "Optional description" },
+        { key: "responseSlaMinutes", label: "Response SLA (minutes)", type: "number", required: false, placeholder: "e.g. 30" },
+        { key: "resolutionSlaMinutes", label: "Resolution SLA (minutes)", type: "number", required: false, placeholder: "e.g. 480" },
         { key: "order", label: "Display Order", type: "number", placeholder: "1" },
         { key: "isActive", label: "Active", type: "checkbox", placeholder: "Mark as active" },
       ]}

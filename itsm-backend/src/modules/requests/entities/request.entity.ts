@@ -23,38 +23,38 @@ export type RequestStatus =
 @Entity("requests")
 export class ServiceRequest {
   @PrimaryGeneratedColumn({ name: "request_id" })
-  requestId: number;
+  requestId!: number;
 
   @ManyToOne(() => Catalog, { onDelete: "RESTRICT" })
   @JoinColumn({ name: "catalog_id" })
-  catalog: Catalog;
+  catalog!: Catalog;
 
   @ManyToOne(() => User, { onDelete: "RESTRICT" })
   @JoinColumn({ name: "requested_by" })
-  requestedBy: User;
+  requestedBy!: User;
 
   @Column({ default: "Submitted" })
-  status: RequestStatus;
+  status!: RequestStatus;
 
   @ManyToOne(() => WorkflowStep, { nullable: true, onDelete: "SET NULL" })
   @JoinColumn({ name: "current_step_id" })
-  currentStep: WorkflowStep | null;
+  currentStep?: WorkflowStep;
 
   @CreateDateColumn({ name: "created_at" })
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn({ name: "updated_at" })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @Column({
-  name: "closed_at",
-  type: "timestamp",
-  nullable: true,
-})
-closedAt: Date | null;
+    name: "closed_at",
+    type: "timestamp",
+    nullable: true,
+  })
+  closedAt!: Date;
 
   @OneToMany(() => RequestVariableValue, (value) => value.request, {
     cascade: true,
   })
-  variableValues: RequestVariableValue[];
+  variableValues!: RequestVariableValue[];
 }

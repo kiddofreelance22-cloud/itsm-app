@@ -31,8 +31,16 @@ export class RolesGuard implements CanActivate {
       role === "Administrator" ? "Admin" : role;
 
     const userRoles = user.roles.map(normalize);
-    const required = requiredRoles.map(normalize);
+    
+    // Expand "Fulfiller" to actual IT roles
+    const expandedRequired = requiredRoles.flatMap((role) => {
+      const normalized = normalize(role);
+      if (normalized === "Fulfiller") {
+        return ["IT Agent", "IT Manager", "Service Desk", "Admin"];
+      }
+      return [normalized];
+    });
 
-    return required.some((role) => userRoles.includes(role));
+    return expandedRequired.some((role) => userRoles.includes(role));
   }
 }
