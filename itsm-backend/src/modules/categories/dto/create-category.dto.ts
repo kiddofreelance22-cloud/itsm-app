@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsBoolean, IsInt, IsOptional, IsString, Min, Matches } from "class-validator";
+import { IsArray, IsBoolean, IsInt, IsOptional, IsString, Min, Matches } from "class-validator";
 
 export class CreateCategoryDto {
   @ApiProperty({ example: "Hardware" })
@@ -17,7 +17,7 @@ export class CreateCategoryDto {
   @IsString()
   description?: string;
 
-  @ApiPropertyOptional({ example: 3 })
+  @ApiPropertyOptional({ example: 3, description: "Omit/null to create a root category" })
   @IsOptional()
   @IsInt()
   parentCategoryId?: number;
@@ -57,4 +57,40 @@ export class CreateCategoryDto {
   @IsOptional()
   @IsBoolean()
   allowInIncident?: boolean;
+
+  @ApiPropertyOptional({
+    example: 5,
+    description: "Assignment group incidents in this category (or its descendants, if they don't override it) should route to. Omit to inherit from the parent.",
+  })
+  @IsOptional()
+  @IsInt()
+  defaultAssignmentGroupId?: number;
+
+  // ── Optional scope overrides ─────────────────────────────────────────────
+  @ApiPropertyOptional({
+    type: [Number],
+    description: "Restrict this node to specific assignment groups (workgroups). Omit to inherit from the parent.",
+  })
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  workgroupIds?: number[];
+
+  @ApiPropertyOptional({
+    type: [Number],
+    description: "Restrict this node to specific locations. Omit to inherit from the parent.",
+  })
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  locationIds?: number[];
+
+  @ApiPropertyOptional({
+    type: [Number],
+    description: "Restrict this node to specific individual users. Omit to inherit from the parent.",
+  })
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  memberIds?: number[];
 }

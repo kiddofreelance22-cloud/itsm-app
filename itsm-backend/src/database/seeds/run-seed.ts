@@ -9,6 +9,7 @@ import { seedUrgency } from "./seed-urgency";
 import { seedAssignmentGroups } from "./seed-assignment-groups";
 import { log } from "console";
 import { seedPriorities } from "./seed-priorities";
+import { seedDepartments } from "./seed-departments";
 
 /**
  * Entry point for `npm run seed`. Initializes the TypeORM connection,
@@ -19,8 +20,9 @@ import { seedPriorities } from "./seed-priorities";
  * 2. Status, Impact, Urgency (independent)
  * 3. Categories and Subcategories (categories first for FK)
  * 4. Assignment Groups (for incident assignment)
- * 5. Admin user (depends on roles)
- * 6. Analyst user (depends on roles)
+ * 5. Departments (for user profile assignment)
+ * 6. Admin user (depends on roles)
+ * 7. Analyst user (depends on roles)
  */
 async function runSeed(): Promise<void> {
   console.log("Initializing database connection...");
@@ -44,16 +46,19 @@ async function runSeed(): Promise<void> {
     console.log("\n[5/6] Seeding urgency levels...");
     await seedUrgency(dataSource);
 
-    console.log("\n[6/6] Seeding assignment groups...");
+    console.log("\n[6/8] Seeding assignment groups...");
     await seedAssignmentGroups(dataSource);
 
-    console.log("\n[7/7] Seeding admin user...");
+    console.log("\n[7/8] Seeding departments...");
+    await seedDepartments(dataSource);
+
+    console.log("\n[8/8] Seeding admin user...");
     await seedAdminUser(dataSource);
 
-    console.log("\n[8/8] Seeding analyst user...");
+    console.log("\n[9/9] Seeding analyst user...");
     await seedAnalystUser(dataSource);
 
-    console.log("\n[9/9] Seeding assignment groups..")
+    console.log("\n[10/10] Seeding priorities..")
     await seedPriorities(dataSource);
 
     console.log("\n✅ Seeding complete.");

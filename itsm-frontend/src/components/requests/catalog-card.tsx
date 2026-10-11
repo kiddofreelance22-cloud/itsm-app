@@ -54,7 +54,7 @@ export function CatalogCard({ catalog, selected, onSelect }: CatalogCardProps) {
         </div>
         <div className="mt-3 flex items-center gap-2">
           <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-            {catalog.category?.categoryName ?? "Uncategorized"}
+            {catalog.serviceCategory?.categoryName ?? catalog.category?.categoryName ?? "Uncategorized"}
           </span>
           {catalog.estimatedTime != null && (
             <span className="inline-flex items-center gap-1 text-xs text-gray-400">

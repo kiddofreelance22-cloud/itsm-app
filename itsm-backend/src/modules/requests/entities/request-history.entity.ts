@@ -16,6 +16,8 @@ export type RequestHistoryAction =
   | "Rejected"
   | "Commented"
   | "Reassigned"
+  | "Updated"
+  | "Cancelled"
   | "Closed";
 
 @Entity("request_history")

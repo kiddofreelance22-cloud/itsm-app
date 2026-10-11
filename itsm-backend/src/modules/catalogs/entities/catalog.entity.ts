@@ -4,9 +4,17 @@ import {
   CreateDateColumn, UpdateDateColumn,
 } from "typeorm";
 import { Category } from "../../categories/entities/category.entity";
+import { SubCategory } from "../../sub-category/entities/sub-category.entity";
 import { Workflow } from "../../workflows/entities/workflow.entity";
 import { AssignmentGroup } from "../../assignment-group/entities/assignment-group.entity";
+import { Priority } from "../../priority/entities/priority.entity";
+import { Impact } from "../../impact/entities/impact.entity";
+import { Urgency } from "../../urgency/entities/urgency.entity";
 import { CatalogVariable } from "./catalog-variable.entity";
+import { CatalogFormSection } from "./catalog-form-section.entity";
+import { CatalogAttachment } from "./catalog-attachment.entity";
+import { ServiceCategory } from "../../service-categories/entities/service-category.entity";
+import { CatalogType } from "./catalog-type.entity";
 
 @Entity("catalogs")
 export class Catalog {
@@ -26,12 +34,22 @@ export class Catalog {
   @Column({ type: "text", nullable: true })
   description!: string;
 
+  // Category for this catalog item, picked from the existing, already-
+  // populated Incident category tree (Category / `categories` table) —
+  // same shared tree used by Incidents, with the same parent/child picker
+  // UX. The old separate "Catalog" (top-level grouping) dropdown has been
+  // removed; there is no separate catalog-only category table.
   @ManyToOne(() => Category, { nullable: true, onDelete: "SET NULL" })
   @JoinColumn({ name: "category_id" })
   category?: Category;
 
-  @Column({ name: "sub_category", type: "varchar", nullable: true })
-  subCategory!: string;
+  @ManyToOne(() => ServiceCategory, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "service_category_id" })
+  serviceCategory?: ServiceCategory;
+
+  @ManyToOne(() => SubCategory, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "sub_category_id" })
+  subCategory?: SubCategory;
 
   @Column({ name: "item_type", type: "varchar", default: "Standard" })
   itemType!: string;
@@ -48,6 +66,13 @@ export class Catalog {
   @Column({ name: "banner_url", type: "varchar", nullable: true })
   bannerUrl!: string;
 
+  @Column({ name: "tile_color", type: "varchar", length: 7, nullable: true })
+  tileColor!: string;
+
+  @ManyToOne(() => CatalogType, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "catalog_type_id" })
+  catalogType?: CatalogType;
+
   // ── Additional Info ───────────────────────────────────────────────────────
   @Column({ name: "request_type", type: "varchar", default: "Access" })
   requestType!: string;
@@ -58,14 +83,17 @@ export class Catalog {
   @Column({ name: "stage", type: "varchar", default: "Production" })
   stage!: string;
 
-  @Column({ name: "impact", type: "varchar", default: "Medium" })
-  impact!: string;
+  @ManyToOne(() => Priority, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "priority_id" })
+  priority?: Priority;
 
-  @Column({ name: "urgency", type: "varchar", default: "Medium" })
-  urgency!: string;
+  @ManyToOne(() => Impact, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "impact_id" })
+  impact?: Impact;
 
-  @Column({ name: "default_priority", type: "varchar", default: "P3 - Moderate" })
-  defaultPriority!: string;
+  @ManyToOne(() => Urgency, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "urgency_id" })
+  urgency?: Urgency;
 
   @Column({ name: "sla_name", type: "varchar", nullable: true })
   slaName!: string;
@@ -75,6 +103,19 @@ export class Catalog {
 
   @Column({ name: "keywords", type: "text", nullable: true })
   keywords!: string;
+
+  @Column({ name: "enable_bulk_sr_creation", type: "boolean", default: false })
+  enableBulkSrCreation!: boolean;
+
+  @ManyToOne(() => Category, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "link_to_other_category_id" })
+  linkToOtherCategory?: Category;
+
+  @Column({ name: "status", type: "varchar", length: 20, default: "draft" })
+  status!: string;
+
+  @Column({ name: "visibility", type: "varchar", length: 20, default: "public" })
+  visibility!: string;
 
   // ── Service Offering ──────────────────────────────────────────────────────
   @Column({ name: "service_offering", type: "varchar", nullable: true })
@@ -151,6 +192,22 @@ export class Catalog {
   @Column({ name: "locations", type: "text", array: true, nullable: true })
   locations!: string[];
 
+  // ── Variables (Form) settings ────────────────────────────────────────────
+  @Column({ name: "show_section_numbers", type: "boolean", default: true })
+  showSectionNumbers!: boolean;
+
+  @Column({ name: "show_progress_indicator", type: "boolean", default: true })
+  showProgressIndicator!: boolean;
+
+  @Column({ name: "collapse_all_sections", type: "boolean", default: false })
+  collapseAllSections!: boolean;
+
+  @Column({ name: "make_fields_mandatory", type: "boolean", default: false })
+  makeFieldsMandatory!: boolean;
+
+  @Column({ name: "form_layout", type: "varchar", default: "single" })
+  formLayout!: "single" | "two-column" | string;
+
   // ── Timestamps ────────────────────────────────────────────────────────────
   @CreateDateColumn({ name: "created_at" })
   createdAt!: Date;
@@ -160,4 +217,10 @@ export class Catalog {
 
   @OneToMany(() => CatalogVariable, (v) => v.catalog, { cascade: true })
   variables!: CatalogVariable[];
+
+  @OneToMany(() => CatalogFormSection, (s) => s.catalog, { cascade: true })
+  sections!: CatalogFormSection[];
+
+  @OneToMany(() => CatalogAttachment, (a) => a.catalog, { cascade: true })
+  attachments!: CatalogAttachment[];
 }

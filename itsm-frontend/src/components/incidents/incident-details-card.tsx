@@ -51,7 +51,6 @@ export function IncidentDetailsCard({ incident }: { incident: Incident }) {
 
           <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-3">
             <Field label="Category" value={incident.category} />
-            <Field label="Sub Category" value={incident.subCategory} />
             <Field label="Assignment Group" value={incident.assignmentGroup} />
           </div>
 

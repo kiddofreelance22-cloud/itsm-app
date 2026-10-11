@@ -1,4 +1,5 @@
 import { DataSource } from "typeorm";
+import { randomUUID } from "crypto";
 
 /**
  * Seeds the Category and SubCategory tables with IT service management categories.
@@ -63,13 +64,15 @@ export async function seedCategories(dataSource: DataSource): Promise<void> {
     const categoryIdMap: Record<string, number> = {};
 
     for (const cat of parentCategories) {
+      const nodeUuid = randomUUID();
       const result = await queryRunner.query(
         `
-        INSERT INTO "categories" ("category_name", "category_code", "description", "display_order", "icon", "is_active", "available_in_portal", "available_in_mobile", "created_at", "updated_at")
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
+        INSERT INTO "categories" ("node_uuid", "category_name", "category_code", "description", "display_order", "icon", "is_active", "available_in_portal", "available_in_mobile", "created_at", "updated_at")
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now())
         RETURNING "category_id"
       `,
         [
+          nodeUuid,
           cat.categoryName,
           cat.categoryCode,
           cat.description,

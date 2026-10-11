@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ConflictException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
+import { uniqueCode } from "../../common/utils/code.util";
 import { Repository, ILike } from "typeorm";
 import { Impact } from "./entities/impact.entity";
 import { CreateImpactDto, UpdateImpactDto } from "./dto/impact.dto";
@@ -11,6 +12,7 @@ export class ImpactService {
     // Name must be unique (case-insensitive) even if a different code is entered
     const nameConflict = await this.repo.findOne({ where: { impactName: ILike(impactName) } });
     if (nameConflict) throw new ConflictException(`Impact "${impactName}" already exists`);
+    if (!dto.impactCode) dto.impactCode = await uniqueCode(this.repo, "impactCode", impactName);
     const exists = await this.repo.findOne({ where: { impactCode: dto.impactCode } });
     if (exists) throw new ConflictException(`Code "${dto.impactCode}" already exists`);
     return this.repo.save(this.repo.create({ ...dto, impactName }));

@@ -1,13 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Ban } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageSpinner } from "@/components/ui/spinner";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { RequestStatusBadge } from "@/components/requests/request-status-badge";
 import { useRequest } from "@/lib/hooks/use-requests";
+
+const CANCELLABLE_STATUSES = new Set(["Submitted", "In Progress"]);
 
 function fmtDate(d: string | Date): string {
   return new Date(d).toLocaleString("en-IN", {
@@ -22,7 +27,9 @@ function requestNumber(id: number): string {
 export default function RequestDetailPage() {
   const params = useParams<{ requestId: string }>();
   const requestId = Number(params.requestId);
-  const { request, isLoading, error } = useRequest(requestId);
+  const { request, isLoading, error, cancel } = useRequest(requestId);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   if (isLoading) return <PageSpinner />;
 
@@ -53,7 +60,18 @@ export default function RequestDetailPage() {
           <h1 className="text-2xl font-bold text-slate-900">{requestNumber(request.requestId)}</h1>
           <p className="mt-1 text-sm text-slate-500">{request.catalog?.catalogName ?? "—"}</p>
         </div>
-        <RequestStatusBadge status={request.status} />
+        <div className="flex items-center gap-3">
+          <RequestStatusBadge status={request.status} />
+          {CANCELLABLE_STATUSES.has(request.status) && (
+            <Button
+              variant="outline"
+              className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
+              onClick={() => setShowCancelConfirm(true)}
+            >
+              <Ban className="size-4" /> Cancel Request
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card className="mt-6">
@@ -92,6 +110,20 @@ export default function RequestDetailPage() {
       <Link href="/service-requests/my-requests" className="mt-4 inline-flex items-center gap-1.5 text-sm text-brand-600 hover:underline">
         <ArrowLeft className="size-3.5" /> Back to My Requests
       </Link>
+
+      <ConfirmDialog
+        open={showCancelConfirm}
+        title="Cancel Request"
+        description={`Are you sure you want to cancel ${requestNumber(request.requestId)}? This action cannot be undone.`}
+        onConfirm={async () => {
+          setIsCancelling(true);
+          const ok = await cancel();
+          setIsCancelling(false);
+          if (ok) setShowCancelConfirm(false);
+        }}
+        onCancel={() => setShowCancelConfirm(false)}
+        isLoading={isCancelling}
+      />
     </div>
   );
 }

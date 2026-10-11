@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Transform } from "class-transformer";
 import {
   IsBoolean, IsEmail, IsIn, IsInt, IsOptional,
   IsString, MinLength, Min, Max,
@@ -54,6 +55,8 @@ export class CreateUserDto {
   mobilePhone?: string;
 
   @ApiPropertyOptional({ example: "john.smith.personal@gmail.com" })
+  // Optional: an empty string from the form means "not provided", so it must not hit the e-mail check.
+  @Transform(({ value }) => (typeof value === "string" && value.trim() === "" ? undefined : value))
   @IsOptional()
   @IsEmail()
   alternateEmail?: string;
@@ -69,10 +72,10 @@ export class CreateUserDto {
   @IsString()
   jobTitle?: string;
 
-  @ApiPropertyOptional({ example: "IT Support" })
+  @ApiPropertyOptional({ example: 1, description: "Department ID instead of department name" })
   @IsOptional()
-  @IsString()
-  department?: string;
+  @IsInt()
+  departmentId?: number;
 
   @ApiPropertyOptional({ example: "Amit Sharma" })
   @IsOptional()

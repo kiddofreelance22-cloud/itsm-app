@@ -4,19 +4,20 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
-import { Card, CardContent } from "@/components/ui/card";
 import { PageSpinner } from "@/components/ui/spinner";
-import { WorkflowFlowDiagram } from "@/components/admin/workflow-flow-diagram";
-import { useAdminWorkflows, useAdminRoles } from "@/lib/hooks/use-admin";
+import { WorkflowEditor } from "@/components/admin/workflow-editor";
+import { useAdminRoles, useAdminWorkflows } from "@/lib/hooks/use-admin";
+import { useAdminAssignmentGroup } from "@/lib/hooks/use-admin-modules";
 import { useEffect, useState } from "react";
-import { Workflow } from "@/types/workflow";
+import { ApprovalLevelInput, Workflow } from "@/types/workflow";
 import { WorkflowsApi } from "@/lib/api/workflows.api";
 
 export default function AdminWorkflowDetailPage() {
   const params = useParams();
   const workflowId = Number(params.workflowId);
-  const { addStep, removeStep } = useAdminWorkflows();
+  const { addStep, removeStep, updateStep, reorderStep, updateTransitions } = useAdminWorkflows();
   const { roles } = useAdminRoles();
+  const { items: assignmentGroups } = useAdminAssignmentGroup();
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -41,41 +42,55 @@ export default function AdminWorkflowDetailPage() {
     return ok;
   };
 
+  const handleUpdateStep = async (id: number, stepId: number, body: { stepName?: string; conditionExpression?: string; approverRoleId?: number | null; approvalLevels?: ApprovalLevelInput[] }) => {
+    const ok = await updateStep(id, stepId, body);
+    if (ok) await load();
+    return ok;
+  };
+
+  const handleReorderStep = async (id: number, stepId: number, newOrder: number) => {
+    const ok = await reorderStep(id, stepId, { newOrder });
+    if (ok) await load();
+    return ok;
+  };
+
   if (isLoading) return <PageSpinner />;
   if (!workflow) return <p className="p-8 text-slate-500">Workflow not found.</p>;
 
   return (
-    <div className="w-full">
-      <Breadcrumb items={[
-        { label: "Home", href: "/home" },
-        { label: "Admin" },
-        { label: "Workflows", href: "/admin/workflows" },
-        { label: workflow.workflowName },
-      ]} />
-
-      <Link href="/admin/workflows"
-        className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
-        <ArrowLeft className="size-4" /> Back to workflows
-      </Link>
-
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-slate-900">{workflow.workflowName}</h1>
-        {workflow.description && (
-          <p className="text-sm text-slate-500 mt-0.5">{workflow.description}</p>
-        )}
+    <div className="w-full h-screen flex flex-col">
+      <div className="border-b border-slate-200 bg-white px-4 py-3">
+        <Breadcrumb items={[
+          { label: "Home", href: "/home" },
+          { label: "Admin" },
+          { label: "Workflows", href: "/admin/workflows" },
+          { label: workflow.workflowName },
+        ]} />
       </div>
 
-      <Card>
-        <CardContent className="pt-5">
-          <WorkflowFlowDiagram
-            workflowId={workflowId}
-            steps={workflow.steps}
-            roles={roles}
-            onAddStep={handleAddStep}
-            onRemoveStep={handleRemoveStep}
-          />
-        </CardContent>
-      </Card>
+      <WorkflowEditor
+        workflowId={workflowId}
+        workflowName={workflow.workflowName}
+        steps={workflow.steps}
+        transitions={workflow.transitions}
+        roles={roles}
+        assignmentGroups={assignmentGroups}
+        onAddStep={handleAddStep}
+        onRemoveStep={handleRemoveStep}
+        onUpdateStep={handleUpdateStep}
+        onSaveApprovalLevels={(stepId, levels) => WorkflowsApi.replaceApprovalLevels(workflowId, stepId, levels)}
+        onSave={async () => {
+          const saved = await WorkflowsApi.update(workflowId, { workflowName: workflow.workflowName });
+          if (saved) await load();
+          return !!saved;
+        }}
+        onReorderStep={handleReorderStep}
+        onUpdateTransitions={async (id, stepId, body) => {
+          const ok = await updateTransitions(id, stepId, body);
+          if (ok) await load();
+          return ok;
+        }}
+      />
     </div>
   );
 }

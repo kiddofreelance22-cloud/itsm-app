@@ -13,6 +13,12 @@ export interface DashboardCounter {
   mineOpen?: number;
   mineInProgress?: number;
   mineResolvedToday?: number;
+  assignedOpen?: number;
+  assignedInProgress?: number;
+  assignedOnHold?: number;
+  totalResolvedInWorkgroups?: number;
+  totalInWorkgroups?: number;
+  totalResolvedInAllWorkgroups?: number;
 }
 
 export interface DashboardTicketSummary {

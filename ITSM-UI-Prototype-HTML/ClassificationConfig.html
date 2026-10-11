@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Classification Configuration</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+html, body { margin: 0; padding: 0; }
+body { display: flex; justify-content: center; background: #E4E7EC; padding: 20px 0; box-sizing: border-box; font-family: 'Public Sans', sans-serif; }
+
+  body { margin: 0; font-family: 'Public Sans', sans-serif; background: #F7F8FA; }
+  a { color: #175CD3; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .tree-grp { font-size: 10.5px; font-weight: 800; color: #8A94A6; text-transform: uppercase; letter-spacing: 0.6px; padding: 14px 14px 6px 14px; margin-top: 4px; display: flex; align-items: center; gap: 6px; border-top: 1px solid #EDEFF2; }
+  .tree-grp:first-child { border-top: none; margin-top: 0; padding-top: 10px; }
+  .tree-item { display: flex; align-items: center; gap: 8px; padding: 7px 14px 7px 30px; font-size: 12.5px; color: #344054; border-left: 3px solid transparent; box-sizing: border-box; }
+  .tree-item:hover { background: #F5F8FE; }
+  .tree-item.active { background: #E3EBFB; color: #175CD3; font-weight: 700; border-left-color: #175CD3; }
+  .tree-parent { font-weight: 700; color: #1D2433; }
+  .tree-child { padding-left: 30px; margin-left: 20px; border-left: 1px solid #E4E7EC; }
+  .tree-child.active { border-left: 3px solid #175CD3; margin-left: 18px; }
+  .tree-subgrp { font-size: 11px; font-weight: 700; color: #475467; padding: 12px 14px 4px 44px; }
+  .tree-subitem { padding-left: 44px; }
+
+  .field { border: 1px solid #D0D5DD; border-radius: 5px; background: #FFFFFF; padding: 0 11px; height: 36px; font-size: 13px; font-family: 'Public Sans', sans-serif; color: #1D2433; width: 100%; box-sizing: border-box; appearance: none; }
+  .field:focus { outline: none; border-color: #175CD3; box-shadow: 0 0 0 3px rgba(23,92,211,0.14); }
+  .field:disabled { background: #F7F8FA; color: #98A2B3; cursor: not-allowed; }
+  .lbl { font-size: 12px; font-weight: 600; color: #344054; display: block; margin-bottom: 5px; }
+  .req { color: #D92D20; }
+  .fld { display: flex; flex-direction: column; }
+
+  .eyebrow { display: flex; align-items: center; justify-content: space-between; padding-bottom: 11px; border-bottom: 2px solid #1D2433; margin-bottom: 18px; }
+  .eyebrow-title { font-size: 11.5px; font-weight: 800; color: #1D2433; text-transform: uppercase; letter-spacing: 0.6px; display: flex; align-items: center; gap: 8px; }
+
+  .btn-ghost { height: 34px; padding: 0 16px; border: 1px solid #D0D5DD; border-radius: 7px; background: #FFFFFF; font-size: 12.5px; color: #344054; font-weight: 600; cursor: pointer; }
+  .btn-primary { height: 34px; padding: 0 16px; border: none; border-radius: 7px; background: #175CD3; color: #FFFFFF; font-size: 12.5px; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgba(23,92,211,0.35); }
+  .btn-danger { height: 34px; padding: 0 16px; border: 1px solid #FDA29B; border-radius: 7px; background: #FFFFFF; color: #D92D20; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+
+  .check-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #344054; font-weight: 600; }
+  .check-row input { width: 14px; height: 14px; accent-color: #175CD3; cursor: pointer; flex: none; }
+
+  .cat-row { display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-radius: 6px; }
+  .cat-row:hover { background: #F5F8FE; }
+  .cat-row:hover .cat-row-actions { opacity: 1; }
+  .cat-row.selected { background: #E3EBFB; }
+  .cat-toggle-btn { width: 20px; height: 20px; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #667085; flex: none; }
+  .cat-leaf-dot { width: 20px; display: flex; align-items: center; justify-content: center; flex: none; }
+  .cat-leaf-dot span { width: 5px; height: 5px; border-radius: 50%; background: #98A2B3; display: block; }
+  .cat-name { font-size: 13px; color: #1D2433; cursor: pointer; flex-grow: 1; }
+  .cat-name.root { font-weight: 700; }
+  .cat-badge { font-size: 10px; font-weight: 700; color: #98A2B3; background: #F2F4F7; padding: 2px 8px; border-radius: 10px; flex: none; }
+  .cat-level-badge { font-size: 9.5px; font-weight: 700; color: #175CD3; background: #EFF4FC; padding: 1px 7px; border-radius: 10px; flex: none; }
+  .cat-row-actions { display: flex; align-items: center; gap: 2px; opacity: 0; flex: none; }
+  .cat-action-btn { width: 24px; height: 24px; border: none; background: transparent; border-radius: 5px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #98A2B3; }
+  .cat-action-btn:hover { background: #E4E7EC; color: #344054; }
+
+  .app-nav { width: 260px; flex: none; background: #FFFFFF; border-right: 1px solid #D5DAE1; overflow: hidden; box-sizing: border-box; position: relative; transition: width 0.15s ease; display: flex; flex-direction: column; }
+  .app-nav.collapsed { width: 60px; }
+  .nav-toggle { position: absolute; top: 14px; right: -12px; width: 24px; height: 24px; border-radius: 50%; background: #FFFFFF; border: 1px solid #D5DAE1; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 5; box-shadow: 0 1px 2px rgba(16,24,40,0.1); }
+  .nav-rail-item { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px auto; cursor: pointer; color: #667085; }
+  .nav-rail-item.active { background: #E3EBFB; color: #175CD3; }
+  .nav-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .nav-scroll::-webkit-scrollbar { width: 6px; }
+  .nav-scroll::-webkit-scrollbar-track { background: transparent; }
+  .nav-scroll::-webkit-scrollbar-thumb { background: #D0D5DD; border-radius: 6px; }
+  .nav-scroll::-webkit-scrollbar-thumb:hover { background: #98A2B3; }
+
+  .panel-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .panel-scroll::-webkit-scrollbar { width: 6px; }
+  .panel-scroll::-webkit-scrollbar-track { background: transparent; }
+  .panel-scroll::-webkit-scrollbar-thumb { background: #D0D5DD; border-radius: 6px; }
+  .panel-scroll::-webkit-scrollbar-thumb:hover { background: #98A2B3; }
+
+</style>
+</head>
+<body>
+<div id="app-root"></div>
+<template id="app-template">
+<div style="width: 1360px; height: 820px; box-sizing: border-box; background: #F7F8FA; display: flex; flex-direction: column; position: relative;">
+
+  <!-- top header -->
+  <div style="height: 46px; flex: none; background: #14213D; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; box-sizing: border-box;">
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="#B7C0D4" stroke-width="1.8" stroke-linecap="round"></path></svg>
+      <div style="display: flex; align-items: center; gap: 7px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="8" rx="1.5" fill="#5B9BF0"></rect><rect x="13" y="3" width="8" height="8" rx="1.5" fill="#175CD3"></rect><rect x="3" y="13" width="8" height="8" rx="1.5" fill="#175CD3"></rect><rect x="13" y="13" width="8" height="8" rx="1.5" fill="#5B9BF0"></rect></svg>
+        <div style="font-size: 13px; font-weight: 700; color: #FFFFFF;">Meridian</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9z" stroke="#B7C0D4" stroke-width="1.6" stroke-linejoin="round"></path><path d="M13.7 21a2 2 0 01-3.4 0" stroke="#B7C0D4" stroke-width="1.6" stroke-linecap="round"></path></svg>
+      <div style="width: 24px; height: 24px; border-radius: 4px; background: #175CD3; color: #FFFFFF; font-weight: 700; font-size: 10.5px; display: flex; align-items: center; justify-content: center;">AD</div>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; display: flex; min-height: 0;">
+
+    <!-- APP NAVIGATOR -->
+    <div class="{{navClass}}">
+
+      <button class="nav-toggle" onClick="{{toggleNav}}" title="{{navToggleTitle}}">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" style="transform: {{chevronTransform}};"><path d="M15 6l-6 6 6 6" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      </button>
+
+      <sc-if value="{{navExpanded}}" hint-placeholder-val="{{true}}">
+        <div style="padding: 10px 12px; border-bottom: 1px solid #EDEFF2; flex: none;">
+          <input type="text" placeholder="Filter navigator" style="width: 100%; height: 28px; padding: 0 8px; border: 1px solid #D0D5DD; border-radius: 5px; font-size: 12px; color: #344054; box-sizing: border-box;">
+        </div>
+        <div class="nav-scroll">
+          <div style="padding: 4px 0;">
+
+            <div class="tree-grp">User</div>
+            <a href="MyIncidents.html" class="tree-item" style="text-decoration:none;">My Incidents</a>
+            <a href="CreateIncident.html" class="tree-item" style="text-decoration:none;">New Incident</a>
+            <div class="tree-item">Feedback Moderation</div>
+            <div class="tree-item">Approve Incident Records</div>
+
+            <div class="tree-grp">Manage Incidents</div>
+            <a href="Main.html" class="tree-item" style="text-decoration:none;">Incident List</a>
+            <a href="CreateIncident.html" class="tree-item" style="text-decoration:none;">New Incident for User</a>
+            <div class="tree-item">Work Order List</div>
+
+            <div class="tree-grp">Configuration</div>
+
+            <div class="tree-subgrp">Incident Masters</div>
+            <a href="CategoryConfig.html" class="tree-item tree-subitem" style="text-decoration:none;">Category</a>
+            <div class="tree-item tree-subitem active">Classification</div>
+            <div class="tree-item tree-subitem">Incident Work Order Checklist</div>
+            <div class="tree-item tree-subitem">Checklist</div>
+            <div class="tree-item tree-subitem">Closure Code</div>
+            <div class="tree-item tree-subitem">Log Incident Page</div>
+            <div class="tree-item tree-subitem">End User Incident Details Page</div>
+            <div class="tree-item tree-subitem">Pending Reason</div>
+            <div class="tree-item tree-subitem">Resolution Code</div>
+
+            <div class="tree-subgrp">SLA Configurations</div>
+            <div class="tree-item tree-subitem">Impact</div>
+            <div class="tree-item tree-subitem">SLA Matrix By CI</div>
+            <div class="tree-item tree-subitem">Priority</div>
+            <div class="tree-item tree-subitem">Priority Matrix</div>
+            <div class="tree-item tree-subitem">Workgroup SLA Window</div>
+            <div class="tree-item tree-subitem">SLA Service Window</div>
+            <div class="tree-item tree-subitem">SLA Matrix</div>
+            <div class="tree-item tree-subitem">Urgency</div>
+
+            <div class="tree-subgrp">TFS</div>
+            <div class="tree-item tree-subitem">TFS Configuration</div>
+            <div class="tree-item tree-subitem">Work Item Field Configuration</div>
+            <div class="tree-item tree-subitem">Value to Value Mapping</div>
+            <div class="tree-item tree-subitem">Profile Mapping</div>
+            <div class="tree-item tree-subitem">TFS Profile Mapping</div>
+
+            <div class="tree-subgrp">Others</div>
+            <div class="tree-item tree-subitem">Cost Configuration</div>
+            <div class="tree-item tree-subitem">Feedback Configuration</div>
+            <div class="tree-item tree-subitem">ETR E-mail Notification</div>
+            <a href="StatusConfig.html" class="tree-item tree-subitem" style="text-decoration:none;">Status Configuration</a>
+            <a href="StatusTransitionMatrix.html" class="tree-item tree-subitem" style="text-decoration:none;">Status Transition Matrix</a>
+            <div class="tree-item tree-subitem">E-mail Notification</div>
+            <div class="tree-item tree-subitem">SMS Notification</div>
+            <div class="tree-item tree-subitem">Voice Call Notification</div>
+            <div class="tree-item tree-subitem">Information Ticker</div>
+            <div class="tree-item tree-subitem">Major Incident</div>
+            <div class="tree-item tree-subitem">Rule</div>
+            <div class="tree-item tree-subitem">User Type</div>
+            <div class="tree-item tree-subitem">Auto Work Order Configuration</div>
+            <div class="tree-item tree-subitem">Standard Operating Procedure (SOP)</div>
+            <div class="tree-item tree-subitem">Evaluator Configuration</div>
+            <div class="tree-item tree-subitem">Approver Group Configuration</div>
+            <div class="tree-item tree-subitem">Approval Configuration</div>
+
+            <div class="tree-subgrp">User Management</div>
+            <a href="UsersList.html" class="tree-item tree-subitem" style="text-decoration:none;">Users</a>
+            <a href="CreateUser.html" class="tree-item tree-subitem" style="text-decoration:none;">Create New User</a>
+
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{navCollapsed}}" hint-placeholder-val="{{false}}">
+        <div class="nav-scroll" style="padding-top: 56px; display: flex; flex-direction: column; align-items: center;">
+          <div class="nav-rail-item" title="User">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="currentColor" stroke-width="1.6"></circle><path d="M5 20c1.2-4 4-6 7-6s5.8 2 7 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+          </div>
+          <div class="nav-rail-item" title="Manage Incidents">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 4h6a1 1 0 011 1v1H8V5a1 1 0 011-1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><rect x="5" y="6" width="14" height="15" rx="2" stroke="currentColor" stroke-width="1.6"></rect><path d="M8.5 12h7M8.5 16h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+          </div>
+          <div class="nav-rail-item active" title="Configuration">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="1.5"></path><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" stroke-width="1.3"></path></svg>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+
+    <!-- MAIN -->
+    <div style="flex-grow: 1; overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column; min-width: 0;">
+
+      <!-- page header -->
+      <div style="padding: 16px 28px; border-bottom: 1px solid #E4E7EC; background: #FFFFFF; flex: none;">
+        <div style="font-size: 11.5px; color: #98A2B3; margin-bottom: 6px;"><span>Configuration</span> <span style="color:#D0D5DD;">&gt;</span> <span>Incident Masters</span> <span style="color:#D0D5DD;">&gt;</span> <span style="color:#344054; font-weight: 500;">Classification</span></div>
+        <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+          <div>
+            <div style="font-weight: 800; font-size: 20px; color: #0F1626; letter-spacing: -0.2px;">Classification Configuration</div>
+            <div style="font-size: 12.5px; color: #667085; margin-top: 3px;">Manage incident classifications as a hierarchy, up to 5 levels deep.</div>
+          </div>
+          <a href="Main.html" class="btn-ghost" style="text-decoration:none; display:flex; align-items:center;">Close</a>
+        </div>
+      </div>
+
+      <div style="flex-grow: 1; overflow: hidden; padding: 22px 28px 24px 28px; box-sizing: border-box; display: flex; gap: 32px;">
+
+        <!-- LEFT: TREE -->
+        <div style="flex: 1 1 60%; min-width: 0; display: flex; flex-direction: column; min-height: 0;">
+          <div class="eyebrow" style="margin-bottom: 12px;">
+            <div class="eyebrow-title">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 4h9l7 7v9H4V4z" stroke="#1D2433" stroke-width="1.8" stroke-linejoin="round"></path><path d="M8 12h6M8 16h4" stroke="#1D2433" stroke-width="1.6" stroke-linecap="round"></path></svg>
+              Classification Tree
+            </div>
+            <button type="button" class="btn-primary" onClick="{{openAddRoot}}" style="height: 30px; padding: 0 14px; display: flex; align-items: center; gap: 6px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"></path></svg>
+              Add New Classification
+            </button>
+          </div>
+
+          <div class="panel-scroll" style="border: 1px solid #E4E7EC; border-radius: 8px; background: #FFFFFF; padding: 8px;">
+            <sc-for list="{{rows}}" as="row" hint-placeholder-count="26">
+              <div class="{{row.rowClass}}" style="padding-left: {{row.indent}}px;">
+
+                <sc-if value="{{row.hasChildren}}" hint-placeholder-val="{{true}}">
+                  <button type="button" class="cat-toggle-btn" onClick="{{row.onToggle}}">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" style="transform: {{row.chevronTransform}};"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  </button>
+                </sc-if>
+                <sc-if value="{{row.isLeaf}}" hint-placeholder-val="{{false}}">
+                  <div class="cat-leaf-dot"><span></span></div>
+                </sc-if>
+
+                <span class="{{row.nameClass}}" onClick="{{row.onEdit}}">{{row.name}}</span>
+
+                <span class="cat-level-badge">L{{row.level}}</span>
+
+                <sc-if value="{{row.inactive}}" hint-placeholder-val="{{false}}">
+                  <span class="cat-badge">Inactive</span>
+                </sc-if>
+
+                <div class="cat-row-actions">
+                  <sc-if value="{{row.canAddChild}}" hint-placeholder-val="{{true}}">
+                    <button type="button" class="cat-action-btn" title="Add sub-classification" onClick="{{row.onAddChild}}">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+                    </button>
+                  </sc-if>
+                </div>
+
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- RIGHT: FORM -->
+        <div style="flex: 1 1 40%; min-width: 0; display: flex; flex-direction: column; border-left: 1px solid #E4E7EC; padding-left: 32px;">
+
+          <sc-if value="{{formOpen}}" hint-placeholder-val="{{false}}">
+            <div class="eyebrow">
+              <div class="eyebrow-title">{{formTitle}}</div>
+              <span class="cat-level-badge">{{formLevelNote}}</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+              <div class="fld">
+                <label class="lbl">Classification Name <span class="req">*</span></label>
+                <input class="field" type="text" value="{{formName}}" onChange="{{setFormName}}" placeholder="e.g. Slow Response">
+              </div>
+              <div class="fld">
+                <label class="lbl">Parent Classification</label>
+                <input class="field" type="text" value="{{formParentLabel}}" disabled>
+              </div>
+              <div class="fld">
+                <label class="lbl">Status</label>
+                <label class="check-row">
+                  <input type="checkbox" checked="{{formIsActive}}" onChange="{{toggleFormActive}}">
+                  Active
+                </label>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px; margin-top: 6px; padding-top: 16px; border-top: 1px solid #F2F4F7;">
+                <button type="button" class="btn-primary" onClick="{{saveForm}}">Save Classification</button>
+                <button type="button" class="btn-ghost" onClick="{{cancelForm}}">Cancel</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{formEmpty}}" hint-placeholder-val="{{true}}">
+            <div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #98A2B3; gap: 10px; padding: 20px;">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M4 4h9l7 7v9H4V4z" stroke="#D0D5DD" stroke-width="1.6" stroke-linejoin="round"></path><path d="M8 12h6M8 16h4" stroke="#D0D5DD" stroke-width="1.5" stroke-linecap="round"></path></svg>
+              <div style="font-size: 13px; color: #667085; font-weight: 600;">No classification selected</div>
+              <div style="font-size: 12px; color: #98A2B3; max-width: 220px; line-height: 1.5;">Click a classification in the tree to edit it, or use "Add New Classification" / the + icon to create a new one.</div>
+            </div>
+          </sc-if>
+
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+</template>
+<script src="dc-mini-runtime.js"></script>
+<script>
+
+const MAX_DEPTH = 5;
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      navCollapsed: false,
+      nextId: 100,
+      tree: [
+        { id: 'incident', name: 'Incident', active: true, children: [
+          { id: 'application', name: 'Application', active: true, children: [
+            { id: 'performance', name: 'Performance', active: true, children: [
+              { id: 'slow-response', name: 'Slow Response', active: true, children: [
+                { id: 'db-query-timeout', name: 'Database Query Timeout', active: true, children: [] }
+              ] },
+              { id: 'high-cpu', name: 'High CPU Usage', active: true, children: [] }
+            ] },
+            { id: 'crash', name: 'Application Crash', active: true, children: [] },
+            { id: 'login-failure', name: 'Login Failure', active: true, children: [] }
+          ] },
+          { id: 'infrastructure', name: 'Infrastructure', active: true, children: [] },
+          { id: 'connectivity', name: 'Connectivity', active: true, children: [] }
+        ] },
+        { id: 'service-request', name: 'Service Request', active: true, children: [
+          { id: 'access-request', name: 'Access Request', active: true, children: [] },
+          { id: 'hardware-request', name: 'Hardware Request', active: true, children: [] },
+          { id: 'software-install', name: 'Software Installation', active: false, children: [] }
+        ] },
+        { id: 'problem', name: 'Problem', active: true, children: [
+          { id: 'recurring-incident', name: 'Recurring Incident', active: true, children: [] },
+          { id: 'root-cause', name: 'Root Cause Analysis', active: true, children: [] }
+        ] },
+        { id: 'change-request', name: 'Change Request', active: true, children: [
+          { id: 'standard-change', name: 'Standard Change', active: true, children: [] },
+          { id: 'emergency-change', name: 'Emergency Change', active: true, children: [] }
+        ] },
+        { id: 'security-event', name: 'Security Event', active: true, children: [
+          { id: 'phishing', name: 'Phishing', active: true, children: [] },
+          { id: 'malware', name: 'Malware', active: true, children: [] }
+        ] },
+        { id: 'inquiry', name: 'Inquiry / Complaint', active: true, children: [
+          { id: 'general-inquiry', name: 'General Inquiry', active: true, children: [] },
+          { id: 'service-complaint', name: 'Service Complaint', active: true, children: [] }
+        ] }
+      ],
+      expanded: { incident: true, application: true, performance: true, 'slow-response': true },
+      formMode: null,
+      formParentId: null,
+      formEditId: null,
+      formName: '',
+      formActive: true
+    };
+  }
+
+  toggleNav() {
+    this.setState({ navCollapsed: !this.state.navCollapsed });
+  }
+
+  toggleExpand(id) {
+    const expanded = Object.assign({}, this.state.expanded);
+    expanded[id] = !expanded[id];
+    this.setState({ expanded });
+  }
+
+  // --- recursive tree helpers (pure functions over a nodes array) ---
+
+  findPath(nodes, targetId, path) {
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      const nextPath = path.concat([n]);
+      if (n.id === targetId) return nextPath;
+      if (n.children && n.children.length) {
+        const found = this.findPath(n.children, targetId, nextPath);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  updateNode(nodes, id, patch) {
+    return nodes.map((n) => {
+      if (n.id === id) return Object.assign({}, n, patch);
+      if (n.children && n.children.length) return Object.assign({}, n, { children: this.updateNode(n.children, id, patch) });
+      return n;
+    });
+  }
+
+  addChildNode(nodes, parentId, newNode) {
+    return nodes.map((n) => {
+      if (n.id === parentId) return Object.assign({}, n, { children: (n.children || []).concat([newNode]) });
+      if (n.children && n.children.length) return Object.assign({}, n, { children: this.addChildNode(n.children, parentId, newNode) });
+      return n;
+    });
+  }
+
+  flatten(nodes, expanded, level, out) {
+    nodes.forEach((n) => {
+      const isExpanded = !!expanded[n.id];
+      const hasChildren = !!(n.children && n.children.length);
+      out.push({ id: n.id, name: n.name, active: n.active, level, hasChildren, isExpanded });
+      if (isExpanded && hasChildren) {
+        this.flatten(n.children, expanded, level + 1, out);
+      }
+    });
+  }
+
+  // --- actions ---
+
+  openAddRoot() {
+    this.setState({ formMode: 'add-root', formParentId: null, formEditId: null, formName: '', formActive: true });
+  }
+
+  openAddChild(parentId) {
+    const expanded = Object.assign({}, this.state.expanded);
+    expanded[parentId] = true;
+    this.setState({ formMode: 'add-child', formParentId: parentId, formEditId: null, formName: '', formActive: true, expanded });
+  }
+
+  openEdit(id) {
+    const path = this.findPath(this.state.tree, id, []);
+    const node = path ? path[path.length - 1] : null;
+    if (!node) return;
+    this.setState({ formMode: 'edit', formParentId: null, formEditId: id, formName: node.name, formActive: node.active !== false });
+  }
+
+  setFormName(e) {
+    this.setState({ formName: e.target.value });
+  }
+
+  toggleFormActive(e) {
+    this.setState({ formActive: e.target.checked });
+  }
+
+  cancelForm() {
+    this.setState({ formMode: null, formParentId: null, formEditId: null, formName: '', formActive: true });
+  }
+
+  saveForm() {
+    const name = this.state.formName.trim();
+    if (!name) return;
+    const mode = this.state.formMode;
+
+    if (mode === 'add-root') {
+      const id = 'cls-' + this.state.nextId;
+      const tree = this.state.tree.concat([{ id, name, active: this.state.formActive, children: [] }]);
+      this.setState({ tree, nextId: this.state.nextId + 1, formMode: null, formParentId: null, formEditId: null, formName: '', formActive: true });
+    } else if (mode === 'add-child') {
+      const id = 'cls-' + this.state.nextId;
+      const tree = this.addChildNode(this.state.tree, this.state.formParentId, { id, name, active: this.state.formActive, children: [] });
+      const expanded = Object.assign({}, this.state.expanded);
+      expanded[this.state.formParentId] = true;
+      this.setState({ tree, expanded, nextId: this.state.nextId + 1, formMode: null, formParentId: null, formEditId: null, formName: '', formActive: true });
+    } else if (mode === 'edit') {
+      const tree = this.updateNode(this.state.tree, this.state.formEditId, { name, active: this.state.formActive });
+      this.setState({ tree, formMode: null, formParentId: null, formEditId: null, formName: '', formActive: true });
+    }
+  }
+
+  renderVals() {
+    const flat = [];
+    this.flatten(this.state.tree, this.state.expanded, 1, flat);
+
+    const rows = flat.map((r) => {
+      const isSelected = this.state.formMode === 'edit' && this.state.formEditId === r.id;
+      return {
+        key: r.id,
+        indent: 4 + (r.level - 1) * 24,
+        level: r.level,
+        name: r.name,
+        nameClass: r.level === 1 ? 'cat-name root' : 'cat-name',
+        rowClass: isSelected ? 'cat-row selected' : 'cat-row',
+        inactive: r.active === false,
+        hasChildren: r.hasChildren,
+        isLeaf: !r.hasChildren,
+        chevronTransform: r.isExpanded ? 'rotate(90deg)' : 'none',
+        canAddChild: r.level < MAX_DEPTH,
+        onToggle: () => this.toggleExpand(r.id),
+        onEdit: () => this.openEdit(r.id),
+        onAddChild: () => this.openAddChild(r.id)
+      };
+    });
+
+    let formTitle = '';
+    let formParentLabel = '— (Root Classification)';
+    let formLevelNote = '';
+
+    if (this.state.formMode === 'add-root') {
+      formTitle = 'Add New Classification';
+      formLevelNote = 'Level 1 of ' + MAX_DEPTH;
+    } else if (this.state.formMode === 'add-child') {
+      const parentPath = this.findPath(this.state.tree, this.state.formParentId, []) || [];
+      const newLevel = parentPath.length + 1;
+      formTitle = 'Add Sub-Classification';
+      formParentLabel = parentPath.length ? parentPath.map((n) => n.name).join(' › ') : formParentLabel;
+      formLevelNote = 'Level ' + newLevel + ' of ' + MAX_DEPTH;
+    } else if (this.state.formMode === 'edit') {
+      const path = this.findPath(this.state.tree, this.state.formEditId, []) || [];
+      const level = path.length || 1;
+      const ancestors = path.slice(0, -1);
+      formTitle = level === 1 ? 'Edit Root Classification' : 'Edit Sub-Classification';
+      formParentLabel = ancestors.length ? ancestors.map((n) => n.name).join(' › ') : formParentLabel;
+      formLevelNote = 'Level ' + level + ' of ' + MAX_DEPTH;
+    }
+
+    return {
+      navClass: this.state.navCollapsed ? 'app-nav collapsed' : 'app-nav',
+      navExpanded: !this.state.navCollapsed,
+      navCollapsed: this.state.navCollapsed,
+      navToggleTitle: this.state.navCollapsed ? 'Expand navigator' : 'Collapse navigator',
+      chevronTransform: this.state.navCollapsed ? 'rotate(180deg)' : 'none',
+      toggleNav: () => this.toggleNav(),
+      rows,
+      openAddRoot: () => this.openAddRoot(),
+      formOpen: !!this.state.formMode,
+      formEmpty: !this.state.formMode,
+      formTitle,
+      formLevelNote,
+      formName: this.state.formName,
+      formParentLabel,
+      setFormName: (e) => this.setFormName(e),
+      formIsActive: this.state.formActive,
+      toggleFormActive: (e) => this.toggleFormActive(e),
+      saveForm: () => this.saveForm(),
+      cancelForm: () => this.cancelForm()
+    };
+  }
+}
+
+
+dcBoot(Component, 'app-root', 'app-template');
+</script>
+</body>
+</html>

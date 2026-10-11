@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import { ApiTags, ApiBearerAuth } from "@nestjs/swagger";
@@ -28,6 +29,15 @@ export class UsersController {
   @Roles("Admin")
   create(@Body() dto: CreateUserDto) {
     return this.usersService.create(dto);
+  }
+
+  // No @Roles — any authenticated user can search the directory. Backs the
+  // "User Lookup" catalog variable on the requester-facing request form.
+  // Registered before ":userId" so "directory" isn't swallowed by that
+  // dynamic param route.
+  @Get("directory")
+  searchDirectory(@Query("q") q?: string) {
+    return this.usersService.searchDirectory(q);
   }
 
   @Get()

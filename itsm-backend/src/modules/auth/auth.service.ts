@@ -4,17 +4,17 @@ import { Repository } from "typeorm";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
 import { User } from "../users/entities/user.entity";
-import { AssignmentGroup } from "../assignment-group/entities/assignment-group.entity";
 import { RolesService } from "../roles/roles.service";
 import { AuthResponseDto } from "./dto/auth-response.dto";
+import { DirectoryService } from "../itsm-config/directory.service";
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(User) private usersRepo: Repository<User>,
-    @InjectRepository(AssignmentGroup) private groupsRepo: Repository<AssignmentGroup>,
     private rolesService: RolesService,
-    private jwtService: JwtService
+    private jwtService: JwtService,
+    private directory: DirectoryService,
   ) {}
 
   /** Called by LocalStrategy. Returns the user (without password hash) or null. */
@@ -22,9 +22,19 @@ export class AuthService {
     username: string,
     plainPassword: string
   ): Promise<Omit<User, "passwordHash"> | null> {
-    const user = await this.usersRepo.findOne({ where: { username } });
+    const user = await this.usersRepo.findOne({ where: [{ username }, { email: username }] });
     if (!user || !user.isActive) {
       return null;
+    }
+
+    // Directory accounts never use the local hash (it is a random, unusable value).
+    if (user.authType === "LDAP") {
+      if (!(await this.directory.authenticateLdap(username, plainPassword))) return null;
+      const { passwordHash, ...ldapSafe } = user;
+      return ldapSafe;
+    }
+    if (await this.directory.isPasswordLoginBlocked(user)) {
+      throw new UnauthorizedException("Your organisation requires you to sign in with Microsoft.");
     }
 
     const passwordMatches = await bcrypt.compare(
@@ -48,15 +58,14 @@ export class AuthService {
     const rawRoles = await this.rolesService.getRoleNamesForUser(user.userId);
     const roles = this.normalizeRoles(rawRoles);
 
-    // Auto-join the default assignment group if the user is not in any group yet.
-    // This lets newly created analysts access the group incident queue immediately
-    // without an admin having to manually add them.
-    await this.ensureDefaultGroupMembership(user.userId);
+    // Get user permissions
+    const permissions = await this.rolesService.getPermissionsForUser(user.userId);
 
     const payload = {
       sub: user.userId,
       username: user.username,
       roles,
+      permissions,
     };
 
     return {
@@ -68,29 +77,10 @@ export class AuthService {
         fullName: user.fullName,
         phone: user.phone,
         roles,
+        permissions,
         isFirstLogin: (user as any).isTempPassword ?? false,
       },
     };
-  }
-
-  /** If the user has no group memberships, silently add them to the default group. */
-  private async ensureDefaultGroupMembership(userId: number): Promise<void> {
-    try {
-      const allGroups = await this.groupsRepo.find({ relations: { members: true } });
-      const isMemberOfAny = allGroups.some((g) => g.members?.some((m) => m.userId === userId));
-      if (isMemberOfAny) return;
-
-      const defaultGroup = allGroups.find((g) => g.isDefault && g.isActive);
-      if (!defaultGroup) return;
-
-      const userEntity = await this.usersRepo.findOne({ where: { userId } });
-      if (!userEntity) return;
-
-      defaultGroup.members = [...(defaultGroup.members ?? []), userEntity];
-      await this.groupsRepo.save(defaultGroup);
-    } catch {
-      // Non-fatal — don't block login if this fails
-    }
   }
 
   /**

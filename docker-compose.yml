@@ -71,3 +71,22 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+  # ── Frontend React (Next.js) ─────────────────────────────────────────────
+  frontend-react:
+    build:
+      context: ./frontend-react
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://50.6.45.238:4000
+    image: itsm-app-frontend-react:latest
+    container_name: itsm-frontend-react
+    restart: unless-stopped
+    env_file:
+      - .env.frontend-react
+    ports:
+      - "3000:3000"
+    networks:
+      - itsm_net
+    depends_on:
+      backend:
+        condition: service_healthy

@@ -10,6 +10,7 @@ import {
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { MultiSelectDropdown } from "@/components/admin/multi-select-dropdown";
 import { useAdminUsers, useAdminRoles } from "@/lib/hooks/use-admin";
+import { useDepartments } from "@/lib/hooks/use-departments";
 import { apiFetch } from "@/lib/api/client";
 import { AssignmentGroup, Role, Location } from "@/types/admin";
 import { CreateUserDto } from "@/lib/api/users.api";
@@ -20,21 +21,7 @@ import { AssignmentGroupApi } from "@/lib/api/admin-modules.api";
 
 type Tab = "contact" | "address" | "emergency" | "work";
 
-const DEPARTMENTS   = ["IT Support", "HR", "Finance", "Operations", "Engineering", "Sales", "Marketing", "Legal"];
-const BIZ_SERVICES  = ["IT Support", "HR Services", "Finance", "Facilities", "Engineering", "Customer Support"];
-const AUTH_TYPES    = ["Internal", "LDAP", "SAML", "OAuth"] as const;
-const USER_TYPES    = ["Internal", "External", "Partner"] as const;
-const LANDING_PAGES = ["My Dashboard", "Home", "My Incidents", "Service Catalog"] as const;
-const LANGUAGES     = ["English (US)", "English (UK)", "Hindi", "German", "French", "Spanish", "Japanese"];
-const DATE_FORMATS  = ["DD MMM YYYY (16 May 2025)", "MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"];
-const TIMEZONES     = [
-  "(GMT+05:30) Asia/Kolkata",
-  "(GMT+00:00) UTC",
-  "(GMT-05:00) America/New_York",
-  "(GMT-08:00) America/Los_Angeles",
-  "(GMT+01:00) Europe/London",
-  "(GMT+08:00) Asia/Singapore",
-];
+
 
 function validatePassword(pw: string) {
   return {
@@ -104,10 +91,10 @@ function TextInput({
 }
 
 function SelectInput({
-  value, onChange, children, disabled, invalid,
+  value, onChange, children, disabled, invalid, className = "",
 }: {
   value: string; onChange: (v: string) => void;
-  children: React.ReactNode; disabled?: boolean; invalid?: boolean;
+  children: React.ReactNode; disabled?: boolean; invalid?: boolean; className?: string;
 }) {
   return (
     <div className="relative">
@@ -121,7 +108,8 @@ function SelectInput({
           "focus:border-brand-500 focus:ring-2 focus:ring-brand-100",
           "disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed",
           invalid ? "border-red-400" : "border-slate-300",
-        ].join(" ")}
+          className,
+        ].filter(Boolean).join(" ")}
       >
         {children}
       </select>
@@ -182,7 +170,7 @@ function RadioButton({
 
 function SectionCard({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden ${className}`}>
+    <div className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-visible ${className}`}>
       <div className="px-6 py-4 border-b border-slate-100">
         <h2 className="text-base font-semibold text-slate-800">{title}</h2>
       </div>
@@ -206,9 +194,18 @@ export default function CreateNewUserPage() {
   const router = useRouter();
   const { create } = useAdminUsers();
   const { roles } = useAdminRoles();
+  const { departments } = useDepartments();
   const [groups, setGroups] = useState<AssignmentGroup[]>([]);
   const [users, setUsers] = useState<{ userId: number; fullName: string }[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+
+  const [bizServices, setBizServices] = useState<string[]>([]);
+  const [authTypes, setAuthTypes] = useState<string[]>([]);
+  const [userTypes, setUserTypes] = useState<string[]>([]);
+  const [landingPages, setLandingPages] = useState<string[]>([]);
+  const [languages, setLanguages] = useState<string[]>([]);
+  const [dateFormats, setDateFormats] = useState<string[]>([]);
+  const [timezones, setTimezones] = useState<string[]>([]);
 
   useEffect(() => {
     apiFetch<AssignmentGroup[]>("/assignment-groups").then(setGroups).catch(() => {});
@@ -216,6 +213,14 @@ export default function CreateNewUserPage() {
     // Pull from the single Location admin source (/admin/location) instead of
     // a separate hardcoded list, so this dropdown always matches what's configured there.
     apiFetch<Location[]>("/locations").then(setLocations).catch(() => {});
+    
+    apiFetch<string[]>("/options/biz-services").then(setBizServices).catch(() => {});
+    apiFetch<string[]>("/options/auth-types").then(setAuthTypes).catch(() => {});
+    apiFetch<string[]>("/options/user-types").then(setUserTypes).catch(() => {});
+    apiFetch<string[]>("/options/landing-pages").then(setLandingPages).catch(() => {});
+    apiFetch<string[]>("/options/languages").then(setLanguages).catch(() => {});
+    apiFetch<string[]>("/options/date-formats").then(setDateFormats).catch(() => {});
+    apiFetch<string[]>("/options/timezones").then(setTimezones).catch(() => {});
   }, []);
 
   // ── Photo ────────────────────────────────────────────────────────────────
@@ -234,11 +239,11 @@ export default function CreateNewUserPage() {
   const [f, setF] = useState({
     // User info
     firstName: "", lastName: "", displayName: "", email: "", phone: "",
-    employeeId: "", jobTitle: "", department: "", managerName: "",
-    businessService: "", location: "", userType: "Internal" as typeof USER_TYPES[number],
+    employeeId: "", jobTitle: "", departmentId: "", managerName: "",
+    businessService: "", location: "", userType: "Internal" as any,
     // Account
     username: "", password: "", confirmPassword: "",
-    authType: "Internal" as typeof AUTH_TYPES[number],
+    authType: "Internal" as any,
     ssoEnabled: false,
     passwordExpiryNever: false, passwordExpiryDays: "90",
     // Role & Access
@@ -297,7 +302,7 @@ export default function CreateNewUserPage() {
     if (!f.email.trim())       e.email      = "Email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) e.email = "Invalid email address";
     if (!f.username.trim())    e.username   = "Username is required";
-    if (!f.department.trim())  e.department = "Department is required";
+    if (!f.departmentId.trim())  e.departmentId = "Department is required";
     if (f.password) {
       if (!pwValid)             e.password  = "Password does not meet requirements";
       if (f.password !== f.confirmPassword) e.confirmPassword = "Passwords do not match";
@@ -321,7 +326,7 @@ export default function CreateNewUserPage() {
       password:     f.password || undefined,
       employeeId:   f.employeeId || undefined,
       jobTitle:     f.jobTitle  || undefined,
-      department:   f.department || undefined,
+      departmentId: f.departmentId ? Number(f.departmentId) : undefined,
       managerName:  f.managerName || undefined,
       businessService: f.businessService || undefined,
       location:     f.location || undefined,
@@ -453,8 +458,9 @@ export default function CreateNewUserPage() {
     <div className="w-full">
       {/* Breadcrumb */}
       <Breadcrumb items={[
-        { label: "Admin",            href: "/admin/users" },
-        { label: "Users Management", href: "/admin/users" },
+        { label: "Home",  href: "/home" },
+        { label: "Admin" },
+        { label: "Users", href: "/admin/users" },
         { label: "Create New User" },
       ]} />
 
@@ -552,10 +558,12 @@ export default function CreateNewUserPage() {
                 <TextInput value={f.jobTitle} onChange={(v) => set("jobTitle", v)} placeholder="IT Support Specialist" />
               </Field>
 
-              <Field label="Department" required error={errors.department}>
-                <SelectInput value={f.department} onChange={(v) => set("department", v)} invalid={!!errors.department}>
+              <Field label="Department" required error={errors.departmentId}>
+                <SelectInput value={f.departmentId} onChange={(v) => set("departmentId", v)} invalid={!!errors.departmentId}>
                   <option value="">Select department</option>
-                  {DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
+                  {departments.filter((d) => d.isActive).map((d) => (
+                    <option key={d.departmentId} value={d.departmentId}>{d.departmentName}</option>
+                  ))}
                 </SelectInput>
               </Field>
               <Field label="Manager">
@@ -570,7 +578,7 @@ export default function CreateNewUserPage() {
               <Field label="Business Service">
                 <SelectInput value={f.businessService} onChange={(v) => set("businessService", v)}>
                   <option value="">Select service</option>
-                  {BIZ_SERVICES.map((s) => <option key={s}>{s}</option>)}
+                  {bizServices.map((s) => <option key={s}>{s}</option>)}
                 </SelectInput>
               </Field>
               <Field label="Location">
@@ -585,7 +593,7 @@ export default function CreateNewUserPage() {
               <div className="col-span-2 grid grid-cols-2 gap-6">
                 <Field label="User Type" required>
                   <div className="flex gap-5 mt-1">
-                    {USER_TYPES.map((t) => (
+                    {userTypes.map((t) => (
                       <RadioButton key={t} label={t} checked={f.userType === t} onChange={() => set("userType", t)} />
                     ))}
                   </div>
@@ -679,8 +687,8 @@ export default function CreateNewUserPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Authentication Type" required>
-                  <SelectInput value={f.authType} onChange={(v) => set("authType", v as typeof AUTH_TYPES[number])}>
-                    {AUTH_TYPES.map((t) => <option key={t}>{t}</option>)}
+                  <SelectInput value={f.authType} onChange={(v) => set("authType", v as any)}>
+                    {authTypes.map((t) => <option key={t}>{t}</option>)}
                   </SelectInput>
                 </Field>
                 <Field label="Single Sign-On (SSO)">
@@ -763,7 +771,7 @@ export default function CreateNewUserPage() {
               </Field>
 
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Assignment Group" hint="An engineer can belong to more than one group.">
+                <Field label="Assignment Group" hint="An engineer can belong to more than one group." className="col-span-2">
                   <MultiSelectDropdown
                     placeholder="Select group(s)"
                     selected={f.assignmentGroupIds}
@@ -771,9 +779,9 @@ export default function CreateNewUserPage() {
                     options={groups.map((g) => ({ value: String(g.groupId), label: g.groupName }))}
                   />
                 </Field>
-                <Field label="Default Landing Page">
+                <Field label="Default Landing Page" className="col-span-2">
                   <SelectInput value={f.defaultLandingPage} onChange={(v) => set("defaultLandingPage", v)}>
-                    {LANDING_PAGES.map((p) => <option key={p}>{p}</option>)}
+                    {landingPages.map((p) => <option key={p}>{p}</option>)}
                   </SelectInput>
                 </Field>
               </div>
@@ -817,7 +825,7 @@ export default function CreateNewUserPage() {
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Language">
                   <SelectInput value={f.language} onChange={(v) => set("language", v)}>
-                    {LANGUAGES.map((l) => <option key={l}>{l}</option>)}
+                    {languages.map((l) => <option key={l}>{l}</option>)}
                   </SelectInput>
                 </Field>
                 <div /> {/* spacer to match layout */}
@@ -836,12 +844,12 @@ export default function CreateNewUserPage() {
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Date Format">
                   <SelectInput value={f.dateFormat} onChange={(v) => set("dateFormat", v)}>
-                    {DATE_FORMATS.map((d) => <option key={d}>{d}</option>)}
+                    {dateFormats.map((d) => <option key={d}>{d}</option>)}
                   </SelectInput>
                 </Field>
                 <Field label="Time Zone">
                   <SelectInput value={f.timeZone} onChange={(v) => set("timeZone", v)}>
-                    {TIMEZONES.map((t) => <option key={t}>{t}</option>)}
+                    {timezones.map((t) => <option key={t}>{t}</option>)}
                   </SelectInput>
                 </Field>
               </div>

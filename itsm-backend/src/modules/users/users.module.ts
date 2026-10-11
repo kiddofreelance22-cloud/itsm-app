@@ -6,11 +6,12 @@ import { UsersController } from "./users.controller";
 import { Role } from "../roles/entities/role.entity";
 import { UserRole } from "../roles/entities/user-role.entity";
 import { AssignmentGroup } from "../assignment-group/entities/assignment-group.entity";
+import { Department } from "../departments/entities/department.entity";
 import { MailModule } from "../mail/mail.module";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Role, UserRole, AssignmentGroup]),
+    TypeOrmModule.forFeature([User, Role, UserRole, AssignmentGroup, Department]),
     MailModule,
   ],
   controllers: [UsersController],

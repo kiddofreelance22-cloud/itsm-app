@@ -21,10 +21,18 @@ import { UrgencyModule } from "./modules/urgency/urgency.module";
 import { SubCategoryModule } from "./modules/sub-category/sub-category.module";
 import { AssignmentGroupModule } from "./modules/assignment-group/assignment-group.module";
 import { LocationModule } from "./modules/location/location.module";
+import { DepartmentsModule } from "./modules/departments/departments.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { TasksModule } from "./modules/tasks/tasks.module";
 import { ProblemsModule } from "./modules/problems/problems.module";
 import { ChangesModule } from "./modules/changes/changes.module";
+import { UploadsModule } from "./modules/uploads/uploads.module";
+import { ServiceCategoriesModule } from "./modules/service-categories/service-categories.module";
+import { ServiceImpactsModule } from "./modules/service-impacts/service-impacts.module";
+import { ServiceCompletionsModule } from "./modules/service-completions/service-completions.module";
+import { RequestMastersModule } from "./modules/request-masters/request-masters.module";
+import { IncidentConfigModule } from "./modules/incident-config/incident-config.module";
+import { ItsmConfigModule } from "./modules/itsm-config/itsm-config.module";
 
 @Module({
   imports: [
@@ -36,7 +44,11 @@ import { ChangesModule } from "./modules/changes/changes.module";
     RequestsModule, IncidentsModule,
     StatusModule, PriorityModule, ImpactModule, UrgencyModule,
     SubCategoryModule, AssignmentGroupModule, LocationModule,
+    DepartmentsModule,
     DashboardModule, TasksModule, ProblemsModule, ChangesModule,
+    UploadsModule,
+    ServiceCategoriesModule, ServiceImpactsModule, ServiceCompletionsModule, RequestMastersModule,
+    IncidentConfigModule, ItsmConfigModule,
   ],
 })
 export class AppModule {}

@@ -65,7 +65,7 @@ export function MultiSelectDropdown({
       </button>
 
       {open && !disabled && (
-        <div className="absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg py-1">
+        <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg py-1">
           {options.length === 0 && (
             <div className="px-3 py-2 text-sm text-slate-400">No options available</div>
           )}

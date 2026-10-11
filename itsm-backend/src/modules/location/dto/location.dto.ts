@@ -3,7 +3,7 @@ import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from "class-validato
 
 export class CreateLocationDto {
   @ApiProperty() @IsString() @MaxLength(150) locationName: string;
-  @ApiProperty() @IsString() @MaxLength(50) locationCode: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(50) locationCode?: string;
   @ApiPropertyOptional({ enum: ["Office", "Branch", "Remote", "Data Center", "Other"] })
   @IsOptional() @IsString() type?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() description?: string;

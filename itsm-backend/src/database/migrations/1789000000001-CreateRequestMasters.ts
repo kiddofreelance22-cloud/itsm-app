@@ -1,0 +1,11 @@
+import { MigrationInterface, QueryRunner } from "typeorm";
+export class CreateRequestMasters1789000000001 implements MigrationInterface {
+  name = "CreateRequestMasters1789000000001";
+  public async up(q: QueryRunner): Promise<void> {
+    await q.query(`CREATE TABLE IF NOT EXISTS "closure_codes" ("closure_code_id" SERIAL PRIMARY KEY, "closure_code_name" VARCHAR(100) NOT NULL UNIQUE, "is_active" BOOLEAN NOT NULL DEFAULT true, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now())`);
+    await q.query(`CREATE TABLE IF NOT EXISTS "pending_reasons" ("pending_reason_id" SERIAL PRIMARY KEY, "pending_reason_name" VARCHAR(100) NOT NULL UNIQUE, "is_active" BOOLEAN NOT NULL DEFAULT true, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now())`);
+    await q.query(`CREATE TABLE IF NOT EXISTS "priority_matrices" ("priority_matrix_id" SERIAL PRIMARY KEY, "urgency_id" INTEGER NOT NULL REFERENCES "urgencies"("urgency_id") ON DELETE RESTRICT, "impact_id" INTEGER NOT NULL REFERENCES "impacts"("impact_id") ON DELETE RESTRICT, "priority_id" INTEGER NOT NULL REFERENCES "priorities"("priority_id") ON DELETE RESTRICT, "is_active" BOOLEAN NOT NULL DEFAULT true, "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "uq_priority_matrix_urgency_impact" UNIQUE ("urgency_id", "impact_id"))`);
+    await q.query(`CREATE TABLE IF NOT EXISTS "sla_service_windows" ("sla_service_window_id" SERIAL PRIMARY KEY, "sla_name" VARCHAR(150) NOT NULL UNIQUE, "holiday_calendar_location" VARCHAR(255), "use_analyst_work_location" BOOLEAN NOT NULL DEFAULT false, "time_zone" VARCHAR(100) NOT NULL DEFAULT 'UTC', "is_default" BOOLEAN NOT NULL DEFAULT false, "is_active" BOOLEAN NOT NULL DEFAULT true, "is_24_7" BOOLEAN NOT NULL DEFAULT false, "service_window" JSONB NOT NULL DEFAULT '[]', "created_at" TIMESTAMP NOT NULL DEFAULT now(), "updated_at" TIMESTAMP NOT NULL DEFAULT now())`);
+  }
+  public async down(q: QueryRunner): Promise<void> { await q.query(`DROP TABLE IF EXISTS "sla_service_windows"`); await q.query(`DROP TABLE IF EXISTS "priority_matrices"`); await q.query(`DROP TABLE IF EXISTS "pending_reasons"`); await q.query(`DROP TABLE IF EXISTS "closure_codes"`); }
+}

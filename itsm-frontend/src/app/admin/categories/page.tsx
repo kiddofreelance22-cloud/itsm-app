@@ -1,90 +1,101 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { FileText, Plus } from "lucide-react";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
-import { DataTable, Column } from "@/components/admin/data-table";
-import { CategoryFormDialog } from "@/components/admin/category-form-dialog";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { CategoryFormPanel } from "@/components/admin/category-form-panel";
+import { CategoryTree } from "@/components/admin/category-tree";
+import { CategoryDeleteDialog } from "@/components/admin/category-delete-dialog";
 import { useAdminCategories } from "@/lib/hooks/use-admin";
+import { CategoryDeletePolicy } from "@/lib/api/categories.api";
 import { Category } from "@/types/admin";
+
+// Flatten the tree (parent-first, indented) — used only to populate the
+// "Parent Category" dropdown inside the form panel; the page itself
+// renders the real nested tree via <CategoryTree>.
+function flattenForDropdown(cats: Category[], depth = 0, out: Category[] = []): Category[] {
+  for (const c of cats) {
+    out.push({ ...c, categoryName: "　".repeat(depth) + c.categoryName });
+    if (c.children?.length) flattenForDropdown(c.children, depth + 1, out);
+  }
+  return out;
+}
 
 export default function AdminCategoriesPage() {
   const { categories, isLoading, create, update, remove } = useAdminCategories();
-  const [dialog, setDialog] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [editCat, setEditCat] = useState<Category | null>(null);
+  const [defaultParentId, setDefaultParentId] = useState<number | null>(null);
   const [deleteCat, setDeleteCat] = useState<Category | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  // Flatten tree for table display
-  const flat: Category[] = [];
-  const flatten = (cats: Category[], depth = 0) => {
-    for (const c of cats) {
-      flat.push({ ...c, categoryName: "　".repeat(depth) + c.categoryName });
-      if (c.children?.length) flatten(c.children, depth + 1);
-    }
-  };
-  flatten(categories);
-
-  const columns: Column<Category>[] = [
-    { key: "categoryName", label: "Name", sortable: true,
-      render: (c) => <span className="font-medium">{c.categoryName}</span> },
-    { key: "parent", label: "Parent",
-      render: (c) => <span className="text-slate-500">{c.parent?.categoryName ?? "—"}</span> },
-    { key: "isActive", label: "Status",
-      render: (c) => (
-        <span className={`text-xs rounded-full px-2 py-0.5 ${c.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-          {c.isActive ? "Active" : "Inactive"}
-        </span>
-      ),
-    },
-    { key: "actions", label: "",
-      render: (c) => (
-        <div className="flex gap-1">
-          <button onClick={() => { setEditCat(c); setDialog(true); }}
-            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600">
-            <Pencil className="size-3.5" />
-          </button>
-          <button onClick={() => setDeleteCat(c)}
-            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-red-600">
-            <Trash2 className="size-3.5" />
-          </button>
-        </div>
-      ),
-    },
-  ];
+  const flat = flattenForDropdown(categories);
 
   return (
     <div className="w-full">
-      <Breadcrumb items={[{ label: "Home", href: "/home" }, { label: "Admin" }, { label: "Categories" }]} />
-      <PageHeader title="Categories" description="Organize catalog items and incidents into categories."
-        action={
-          <Button onClick={() => { setEditCat(null); setDialog(true); }} className="gap-1.5">
-            <Plus className="size-4" /> Add Category
-          </Button>
-        }
-      />
-      <DataTable columns={columns} data={flat} isLoading={isLoading}
-        rowKey={(c) => c.categoryId} searchKeys={["categoryName"]} searchPlaceholder="Search categories..." />
+      <Breadcrumb items={[{ label: "Home", href: "/home" }, { label: "Admin" }, { label: "Category Management" }]} />
 
-      <CategoryFormDialog
-        open={dialog} category={editCat} categories={flat} isLoading={saving}
-        onSubmit={async (data) => {
-          setSaving(true);
-          const ok = editCat ? await update(editCat.categoryId, data) : await create(data);
-          setSaving(false);
-          return !!ok;
+      <div className={`flex flex-col items-stretch gap-5 lg:flex-row ${panelOpen ? "min-h-[calc(100vh-110px)]" : ""}`}>
+        <div className={`min-w-0 ${panelOpen ? "lg:w-[54%]" : "flex-1"}`}>
+          {!panelOpen && <PageHeader title="Category Management" description="Build a category tree used in service requests and incidents — add subcategories inline and optionally scope any node to specific workgroups, locations, or members."
+            action={<Button onClick={() => { setEditCat(null); setDefaultParentId(null); setPanelOpen(true); }} className="gap-1.5"><Plus className="size-4" /> Add Root Category</Button>}
+          />}
+          {panelOpen && (
+            <div className="mb-3 flex items-center justify-between border-b-2 border-slate-800 pb-2.5">
+              <h1 className="flex items-center gap-2 text-[13px] font-extrabold uppercase tracking-[0.6px] text-slate-800"><FileText className="size-3.5" /> Category Tree</h1>
+              <Button onClick={() => { setEditCat(null); setDefaultParentId(null); setPanelOpen(true); }} className="h-9 gap-1.5 rounded-lg px-4 text-xs"><Plus className="size-3.5" /> Add New Category</Button>
+            </div>
+          )}
+
+          {isLoading ? (
+            <div className="rounded-lg border border-slate-200 bg-white py-16 text-center text-sm text-slate-400">
+              Loading categories…
+            </div>
+          ) : (
+            <CategoryTree
+              categories={categories}
+              onEdit={(c) => { setEditCat(c); setDefaultParentId(null); setPanelOpen(true); }}
+              onAddChild={(parent) => { setEditCat(null); setDefaultParentId(parent.categoryId); setPanelOpen(true); }}
+              onDelete={(c) => setDeleteCat(c)}
+            />
+          )}
+        </div>
+
+        {panelOpen && (
+          <div className="w-full shrink-0 lg:w-[46%] lg:border-l lg:border-slate-200 lg:pl-8">
+            <CategoryFormPanel
+              open={panelOpen}
+              category={editCat}
+              categories={flat}
+              defaultParentId={defaultParentId}
+              isLoading={saving}
+              onSubmit={async (data) => {
+                setSaving(true);
+                const ok = editCat ? await update(editCat.categoryId, data) : await create(data);
+                setSaving(false);
+                return !!ok;
+              }}
+              onClose={() => { setPanelOpen(false); setEditCat(null); setDefaultParentId(null); }}
+            />
+          </div>
+        )}
+      </div>
+
+      <CategoryDeleteDialog
+        category={deleteCat}
+        isLoading={deleting}
+        onConfirm={async (policy: CategoryDeletePolicy) => {
+          if (!deleteCat) return;
+          setDeleting(true);
+          await remove(deleteCat.categoryId, policy);
+          setDeleting(false);
+          setDeleteCat(null);
         }}
-        onClose={() => { setDialog(false); setEditCat(null); }}
+        onCancel={() => setDeleteCat(null)}
       />
-
-      <ConfirmDialog open={!!deleteCat} title={`Delete "${deleteCat?.categoryName}"?`}
-        description="Sub-categories will lose their parent reference."
-        confirmLabel="Delete" variant="danger"
-        onConfirm={async () => { if (deleteCat) { await remove(deleteCat.categoryId); setDeleteCat(null); } }}
-        onCancel={() => setDeleteCat(null)} />
     </div>
   );
 }

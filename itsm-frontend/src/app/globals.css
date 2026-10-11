@@ -1,30 +1,30 @@
+@import url("https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
 :root {
   --background: #ffffff;
-  --foreground: #1e293b;
+  --foreground: #1d2433;
 
   /* Brand palette sampled from the ITSM design reference */
-  --color-navy-950: #0a1830;
-  --color-navy-900: #0d2144;
-  --color-navy-800: #14305e;
+  --color-navy-950: #14213d;
+  --color-navy-900: #14213d;
+  --color-navy-800: #1b2946;
 
-  --color-brand-50: #eef3fe;
-  --color-brand-100: #dbe7fd;
-  --color-brand-500: #3b6ff0;
-  --color-brand-600: #2554d9;
-  --color-brand-700: #1c41ad;
+  --color-brand-50: #f5f8fe;
+  --color-brand-100: #e3ebfb;
+  --color-brand-500: #5b9bf0;
+  --color-brand-600: #175cd3;
+  --color-brand-700: #1247a6;
 
-  --color-surface: #f7f9fc;
-  --color-border-subtle: #e6e9f0;
+  --color-surface: #f7f8fa;
+  --color-border-subtle: #edeff2;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
 
   --color-navy-950: var(--color-navy-950);
   --color-navy-900: var(--color-navy-900);
@@ -43,8 +43,16 @@
 body {
   background: var(--color-surface);
   color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-size: 13px;
 }
+
+* { border-color: var(--color-border-subtle); }
+
+a { color: var(--color-brand-600); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+button, input, select, textarea { font: inherit; }
 
 /* Visible focus ring for keyboard navigation, respected across all interactive elements */
 :focus-visible {
@@ -76,6 +84,64 @@ body {
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;             /* Chrome/Safari/Opera */
+}
+
+/* Compact navigator treatment used by the incident module reference. */
+.incident-tree-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.incident-tree-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.incident-tree-scroll::-webkit-scrollbar-thumb {
+  background: #d0d5dd;
+  border-radius: 6px;
+}
+.incident-tree-scroll::-webkit-scrollbar-thumb:hover {
+  background: #98a2b3;
+}
+.incident-tree-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 14px 14px 6px;
+  border-top: 1px solid #edeff2;
+  color: #8a94a6;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.incident-tree-group:first-child {
+  margin-top: 0;
+  padding-top: 10px;
+  border-top: 0;
+}
+.incident-tree-subgroup {
+  padding: 12px 14px 4px 44px;
+  color: #475467;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.incident-tree-item {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  box-sizing: border-box;
+  padding: 7px 14px 7px 30px;
+  border-left: 3px solid transparent;
+  color: #344054;
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+.incident-tree-item-active {
+  border-left-color: var(--color-brand-600);
+  background: var(--color-brand-100);
+  color: var(--color-brand-700);
+  font-weight: 700;
 }
 
 /* Hide Next.js dev overlay indicator used in development (small "N" badge)

@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { UsersApi, CreateUserDto, UpdateUserDto } from "@/lib/api/users.api";
 import { RolesApi, CreateRoleDto } from "@/lib/api/roles.api";
 import { CategoriesApi, CreateCategoryDto } from "@/lib/api/categories.api";
-import { WorkflowsApi, CreateWorkflowDto, CreateStepDto } from "@/lib/api/workflows.api";
+import { WorkflowsApi, CreateWorkflowDto, CreateStepDto, UpdateStepDto, ReorderStepDto, UpdateTransitionsDto } from "@/lib/api/workflows.api";
 import { AdminUser, Role, Category } from "@/types/admin";
 import { Workflow } from "@/types/workflow";
 import { useToast } from "./use-toast";
@@ -164,7 +164,7 @@ export function useAdminCategories() {
 
   const fetch = useCallback(async () => {
     setIsLoading(true);
-    try { setCategories(await CategoriesApi.list()); }
+    try { setCategories(await CategoriesApi.tree()); }
     catch (e: unknown) { toast({ title: "Error", description: msg(e), variant: "error" }); }
     finally { setIsLoading(false); }
   }, [toast]);
@@ -195,9 +195,9 @@ export function useAdminCategories() {
     }
   }, [fetch, toast]);
 
-  const remove = useCallback(async (id: number) => {
+  const remove = useCallback(async (id: number, policy?: "cascade" | "reparent") => {
     try {
-      await CategoriesApi.remove(id);
+      await CategoriesApi.remove(id, policy);
       toast({ title: "Category deleted", variant: "success" });
       await fetch();
       return true;
@@ -218,7 +218,21 @@ export function useAdminWorkflows() {
 
   const fetch = useCallback(async () => {
     setIsLoading(true);
-    try { setWorkflows(await WorkflowsApi.list()); }
+    try { 
+      const workflowList = await WorkflowsApi.list();
+      // Fetch steps for each workflow to provide complete data for the editor
+      const workflowsWithSteps = await Promise.all(
+        workflowList.map(async (workflow) => {
+          try {
+            const fullWorkflow = await WorkflowsApi.getOne(workflow.workflowId);
+            return fullWorkflow;
+          } catch {
+            return workflow; // Return basic workflow if detailed fetch fails
+          }
+        })
+      );
+      setWorkflows(workflowsWithSteps);
+    }
     catch (e: unknown) { toast({ title: "Error", description: msg(e), variant: "error" }); }
     finally { setIsLoading(false); }
   }, [toast]);
@@ -251,13 +265,13 @@ export function useAdminWorkflows() {
 
   const addStep = useCallback(async (id: number, body: CreateStepDto) => {
     try {
-      await WorkflowsApi.addStep(id, body);
+      const step = await WorkflowsApi.addStep(id, body);
       toast({ title: "Step added", variant: "success" });
       await fetch();
-      return true;
+      return step;
     } catch (e: unknown) {
       toast({ title: "Error", description: msg(e), variant: "error" });
-      return false;
+      return null;
     }
   }, [fetch, toast]);
 
@@ -273,6 +287,54 @@ export function useAdminWorkflows() {
     }
   }, [fetch, toast]);
 
-  return { workflows, isLoading, refetch: fetch, create, update, addStep, removeStep };
+  const updateStep = useCallback(async (id: number, stepId: number, body: UpdateStepDto) => {
+    try {
+      await WorkflowsApi.updateStep(id, stepId, body);
+      toast({ title: "Step updated", variant: "success" });
+      await fetch();
+      return true;
+    } catch (e: unknown) {
+      toast({ title: "Error", description: msg(e), variant: "error" });
+      return false;
+    }
+  }, [fetch, toast]);
+
+  const reorderStep = useCallback(async (id: number, stepId: number, body: ReorderStepDto) => {
+    try {
+      await WorkflowsApi.reorderStep(id, stepId, body);
+      toast({ title: "Step reordered", variant: "success" });
+      await fetch();
+      return true;
+    } catch (e: unknown) {
+      toast({ title: "Error", description: msg(e), variant: "error" });
+      return false;
+    }
+  }, [fetch, toast]);
+
+  const updateTransitions = useCallback(async (id: number, stepId: number, body: UpdateTransitionsDto) => {
+    try {
+      await WorkflowsApi.updateTransitions(id, stepId, body);
+      toast({ title: "Condition branches saved", variant: "success" });
+      await fetch();
+      return true;
+    } catch (e: unknown) {
+      toast({ title: "Error", description: msg(e), variant: "error" });
+      return false;
+    }
+  }, [fetch, toast]);
+
+  const remove = useCallback(async (id: number) => {
+    try {
+      await WorkflowsApi.remove(id);
+      toast({ title: "Workflow deleted", variant: "success" });
+      await fetch();
+      return true;
+    } catch (e: unknown) {
+      toast({ title: "Error", description: msg(e), variant: "error" });
+      return false;
+    }
+  }, [fetch, toast]);
+
+  return { workflows, isLoading, refetch: fetch, create, update, addStep, removeStep, updateStep, reorderStep, updateTransitions, remove };
 }
 

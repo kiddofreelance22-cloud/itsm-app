@@ -32,13 +32,13 @@ export function CatalogGrid({ catalogs, isLoading }: CatalogGridProps) {
       (c) =>
         c.catalogName.toLowerCase().includes(q) ||
         c.shortDescription?.toLowerCase().includes(q) ||
-        (c.category?.categoryName?.toLowerCase().includes(q) ?? false)
+        (c.serviceCategory?.categoryName?.toLowerCase().includes(q) ?? false)
     );
     if (category) {
-      list = list.filter((c) => (c.category?.categoryName ?? "Uncategorized") === category);
+      list = list.filter((c) => (c.serviceCategory?.categoryName ?? "Uncategorized") === category);
     }
     if (subCategory) {
-      list = list.filter((c) => c.subCategory === subCategory);
+      list = list.filter((c) => c.subCategory?.subCategoryName === subCategory);
     }
     return list;
   }, [catalogs, search, category, subCategory]);
@@ -59,7 +59,7 @@ export function CatalogGrid({ catalogs, isLoading }: CatalogGridProps) {
   const grouped = useMemo(() => {
     const map = new Map<string, Catalog[]>();
     for (const c of sorted) {
-      const key = c.category?.categoryName ?? "Uncategorized";
+      const key = c.serviceCategory?.categoryName ?? "Uncategorized";
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(c);
     }
@@ -71,7 +71,7 @@ export function CatalogGrid({ catalogs, isLoading }: CatalogGridProps) {
   if (isLoading) return <PageSpinner />;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[200px_1fr_300px]">
+    <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)] 2xl:grid-cols-[200px_minmax(0,1fr)_300px]">
       {/* Category sidebar */}
       <aside className="hidden lg:block">
         <CatalogCategorySidebar
@@ -117,7 +117,7 @@ export function CatalogGrid({ catalogs, isLoading }: CatalogGridProps) {
         {Array.from(grouped.entries()).map(([categoryName, items]) => (
           <section key={categoryName}>
             <h2 className="mb-3 text-base font-semibold text-gray-700">{categoryName}</h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
               {items.map((c) => (
                 <CatalogCard
                   key={c.catalogId}
@@ -132,7 +132,7 @@ export function CatalogGrid({ catalogs, isLoading }: CatalogGridProps) {
       </div>
 
       {/* Selection summary panel */}
-      <aside className="hidden lg:block">
+      <aside className="hidden 2xl:block">
         <Card className="sticky top-6">
           <CardContent className="pt-5">
             {selected ? (

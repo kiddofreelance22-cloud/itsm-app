@@ -2,9 +2,10 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  ForbiddenException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { Repository, In } from "typeorm";
 import { Role } from "./entities/role.entity";
 import { UserRole } from "./entities/user-role.entity";
 import { Permission } from "./entities/permission.entity";
@@ -14,6 +15,11 @@ import { CreateRoleDto } from "./dto/create-role.dto";
 import { UpdateRoleDto } from "./dto/update-role.dto";
 import { UpdateRolePermissionsDto } from "./dto/update-role-permissions.dto";
 import { AssignRoleDto } from "./dto/assign-role.dto";
+
+// System roles required for the app's own RBAC checks (@Roles() decorators,
+// JwtStrategy, seed data). Deleting these would lock admins out or break
+// guards throughout the app, so they can't be removed from the UI/API.
+const PROTECTED_ROLE_NAMES = ["Admin", "Administrator"];
 
 @Injectable()
 export class RolesService {
@@ -58,12 +64,30 @@ export class RolesService {
 
   async update(roleId: number, dto: UpdateRoleDto): Promise<Role> {
     const role = await this.findOne(roleId);
+    if (dto.roleName && dto.roleName.trim() !== role.roleName) {
+      const conflict = await this.rolesRepo.findOne({ where: { roleName: dto.roleName.trim() } });
+      if (conflict && conflict.roleId !== roleId) {
+        throw new ConflictException(`Role "${dto.roleName}" already exists`);
+      }
+    }
+    if (PROTECTED_ROLE_NAMES.includes(role.roleName) && dto.roleName && dto.roleName.trim() !== role.roleName) {
+      throw new ForbiddenException(`"${role.roleName}" is a protected system role and cannot be renamed.`);
+    }
     Object.assign(role, dto);
     return this.rolesRepo.save(role);
   }
 
   async remove(roleId: number): Promise<void> {
     const role = await this.findOne(roleId);
+    if (PROTECTED_ROLE_NAMES.includes(role.roleName)) {
+      throw new ForbiddenException(`"${role.roleName}" is a protected system role and cannot be deleted.`);
+    }
+    const assignedCount = await this.userRolesRepo.count({ where: { role: { roleId } } });
+    if (assignedCount > 0) {
+      throw new ConflictException(
+        `Cannot delete "${role.roleName}" — it is still assigned to ${assignedCount} user(s). Reassign or remove those users first.`
+      );
+    }
     await this.rolesRepo.remove(role);
   }
 
@@ -158,12 +182,18 @@ export class RolesService {
   async assignRoleToUser(dto: AssignRoleDto): Promise<UserRole> {
     const user = await this.usersRepo.findOne({
       where: { userId: dto.userId },
+      relations: { primaryRole: true },
     });
     if (!user) {
       throw new NotFoundException(`User ${dto.userId} not found`);
     }
 
     const role = await this.findOne(dto.roleId);
+
+    if (!user.primaryRole) {
+      user.primaryRole = role;
+      await this.usersRepo.save(user);
+    }
 
     const existing = await this.userRolesRepo.findOne({
       where: { user: { userId: dto.userId }, role: { roleId: dto.roleId } },
@@ -200,5 +230,46 @@ export class RolesService {
       relations: { role: true },
     });
     return userRoles.map((ur) => ur.role.roleName);
+  }
+
+  /** Get all permissions for a user (union of all their roles' permissions) */
+  async getPermissionsForUser(userId: number): Promise<string[]> {
+    const userRoles = await this.userRolesRepo.find({
+      where: { user: { userId } },
+      relations: { role: true },
+    });
+
+    const roleIds = userRoles.map((ur) => ur.role.roleId);
+    
+    if (roleIds.length === 0) return [];
+
+    const rolePermissions = await this.rolePermissionsRepo.find({
+      where: { roleId: In(roleIds) },
+      relations: ["permission"],
+    });
+
+    // Return permissions in format "moduleName:permissionType" (e.g., "incidents:read")
+    return rolePermissions.map((rp) => 
+      `${rp.permission.moduleName.toLowerCase()}:${rp.permission.permissionType.toLowerCase()}`
+    );
+  }
+
+  /** Users currently holding this role — powers the "Users" tab on the Edit Role panel. */
+  async getUsersForRole(roleId: number): Promise<
+    { userId: number; fullName: string; email: string; isActive: boolean }[]
+  > {
+    await this.findOne(roleId); // 404s if the role doesn't exist
+    const userRoles = await this.userRolesRepo.find({
+      relations: { user: true, role: true },
+    });
+    const assignedUsers = userRoles
+      .filter((userRole) => userRole.role?.roleId === roleId)
+      .sort((left, right) => left.user.fullName.localeCompare(right.user.fullName));
+    return assignedUsers.map((ur) => ({
+      userId: ur.user.userId,
+      fullName: ur.user.fullName,
+      email: ur.user.email,
+      isActive: ur.user.isActive,
+    }));
   }
 }

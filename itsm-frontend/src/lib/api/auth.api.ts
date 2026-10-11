@@ -9,6 +9,7 @@ export interface LoginResponse {
     fullName: string;
     phone?: string;
     roles: string[];
+    permissions: string[];
     isFirstLogin?: boolean;
   };
 }

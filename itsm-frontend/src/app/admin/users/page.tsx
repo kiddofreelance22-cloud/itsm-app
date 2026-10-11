@@ -60,6 +60,12 @@ export default function AdminUsersPage() {
         : <span className="text-slate-300 text-xs">—</span>,
     },
     {
+      key: "department", label: "Department",
+      render: (u) => u.department
+        ? <span className="text-xs text-slate-600">{u.department.departmentName}</span>
+        : <span className="text-slate-300 text-xs">—</span>,
+    },
+    {
       key: "isActive", label: "Status",
       render: (u) => (
         <span className={`text-xs rounded-full px-2.5 py-0.5 font-medium ring-1 ring-inset ${

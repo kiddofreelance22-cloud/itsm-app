@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Headphones, Bell, HelpCircle, ChevronDown, Menu, User, Settings, LogOut } from "lucide-react";
+import { Bell, HelpCircle, ChevronDown, Menu, User, Settings, LogOut, Grid2X2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -21,7 +21,7 @@ export function Navbar({ onMenuClick }: NavbarProps) {
   const initials = (user?.fullName ?? "U").split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between bg-navy-900 px-4 text-white md:px-6">
+    <header className="sticky top-0 z-30 flex h-[46px] items-center justify-between bg-navy-900 px-3.5 text-white">
       <div className="flex items-center gap-3">
         <button
           onClick={onMenuClick}
@@ -30,27 +30,22 @@ export function Navbar({ onMenuClick }: NavbarProps) {
         >
           <Menu className="size-5" />
         </button>
-        <Link href="/home" className="flex items-center gap-2.5">
-          <Headphones className="size-6 shrink-0" aria-hidden="true" />
-          <span className="leading-tight">
-            <span className="block text-base font-bold tracking-wide">ITSM</span>
-            <span className="hidden text-[11px] font-medium text-[rgba(255,255,255,0.7)] sm:block">
-              Incident Management System
-            </span>
-          </span>
+        <Link href="/home" className="flex items-center gap-2">
+          <Grid2X2 className="size-4 text-[#5b9bf0]" aria-hidden="true" />
+          <span className="text-[13px] font-bold tracking-wide">Meridian</span>
         </Link>
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
         <Link
           href="/notifications"
-          className="relative rounded-md p-2 text-[rgba(255,255,255,0.85)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white"
+          className="relative rounded-[5px] p-1.5 text-[#b7c0d4] hover:bg-[rgba(255,255,255,0.1)] hover:text-white"
           aria-label="Notifications"
         >
           <Bell className="size-5" />
         </Link>
         <button
-          className="hidden rounded-md p-2 text-[rgba(255,255,255,0.85)] hover:bg-[rgba(255,255,255,0.1)] hover:text-white sm:block"
+          className="hidden rounded-[5px] p-1.5 text-[#b7c0d4] hover:bg-[rgba(255,255,255,0.1)] hover:text-white sm:block"
           aria-label="Help"
         >
           <HelpCircle className="size-5" />
@@ -59,8 +54,8 @@ export function Navbar({ onMenuClick }: NavbarProps) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 rounded-md py-1 pl-1 pr-2 text-sm hover:bg-[rgba(255,255,255,0.1)]">
-              <Avatar className="size-8">
-                <AvatarFallback className="bg-white text-navy-900">
+              <Avatar className="size-6 rounded-[4px]">
+                <AvatarFallback className="rounded-[4px] bg-brand-600 text-[10px] text-white">
                   {initials}
                 </AvatarFallback>
               </Avatar>

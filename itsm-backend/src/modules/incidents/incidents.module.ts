@@ -9,9 +9,13 @@ import { AssignmentGroup } from "../assignment-group/entities/assignment-group.e
 import { Location } from "../location/entities/location.entity";
 import { ServiceRequest } from "../requests/entities/request.entity";
 import { Priority } from "../priority/entities/priority.entity";
+import { CategoriesModule } from "../categories/categories.module";
+import { ItsmConfigModule } from "../itsm-config/itsm-config.module";
 import { IncidentsService } from "./incidents.service";
 import { IncidentsController } from "./incidents.controller";
 import { IncidentsGateway } from "./incidents.gateway";
+import { IncidentRecordController } from "../itsm-config/incident-record.controller";
+import { IncidentAttachmentsController } from "../itsm-config/incident-attachments.controller";
 
 @Module({
   imports: [
@@ -19,8 +23,10 @@ import { IncidentsGateway } from "./incidents.gateway";
       Incident, IncidentActivity,
       Category, SubCategory, User, AssignmentGroup, Location, ServiceRequest, Priority,
     ]),
+    CategoriesModule,
+    ItsmConfigModule,
   ],
-  controllers: [IncidentsController],
+  controllers: [IncidentsController, IncidentRecordController, IncidentAttachmentsController],
   providers: [IncidentsService, IncidentsGateway],
   exports: [IncidentsService],
 })

@@ -15,6 +15,7 @@ import { RequestVariableValue } from "./request-variable-value.entity";
 
 export type RequestStatus =
   | "Submitted"
+  | "Pending Approval"
   | "In Progress"
   | "Approved"
   | "Rejected"

@@ -40,6 +40,11 @@ export const RolesApi = {
   
   getPermissions: (roleId: number) =>
     apiFetch<RolePermissionsResponse>(`/roles/${roleId}/permissions`),
+
+  getUsers: (roleId: number) =>
+    apiFetch<{ userId: number; fullName: string; email: string; isActive: boolean }[]>(
+      `/roles/${roleId}/users`
+    ),
   
   updatePermissions: (roleId: number, body: UpdateRolePermissionsDto) =>
     apiFetch<{ role: Role; permissions: Permission[] }>(`/roles/${roleId}/permissions`, {

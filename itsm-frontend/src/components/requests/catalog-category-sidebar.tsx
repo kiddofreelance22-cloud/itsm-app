@@ -24,17 +24,18 @@ interface CatalogCategorySidebarProps {
 function buildTree(catalogs: Catalog[]): CategoryNode[] {
   const map = new Map<string, Map<string, number>>();
   for (const c of catalogs) {
-    const cat = c.category?.categoryName ?? "Uncategorized";
+    const cat = c.serviceCategory?.categoryName ?? "Uncategorized";
     if (!map.has(cat)) map.set(cat, new Map());
     const subMap = map.get(cat)!;
     if (c.subCategory) {
-      subMap.set(c.subCategory, (subMap.get(c.subCategory) ?? 0) + 1);
+      const subCategoryName = c.subCategory.subCategoryName;
+      subMap.set(subCategoryName, (subMap.get(subCategoryName) ?? 0) + 1);
     }
   }
   return Array.from(map.entries())
     .map(([name, subMap]) => ({
       name,
-      count: catalogs.filter((c) => (c.category?.categoryName ?? "Uncategorized") === name).length,
+      count: catalogs.filter((c) => (c.serviceCategory?.categoryName ?? "Uncategorized") === name).length,
       subCategories: Array.from(subMap.entries())
         .map(([subName, count]) => ({ name: subName, count }))
         .sort((a, b) => a.name.localeCompare(b.name)),

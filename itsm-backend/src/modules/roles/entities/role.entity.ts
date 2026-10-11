@@ -26,6 +26,7 @@ export class Role {
   @Column({ nullable: true })
   description!: string;
 
+  @Column({ name: "display_order", default: 0 }) displayOrder!: number;
   @Column({ name: "is_active", default: true })
   isActive!: boolean;
 

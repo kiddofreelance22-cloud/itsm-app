@@ -49,6 +49,7 @@ export async function seedAdminUser(dataSource: DataSource): Promise<void> {
       email: adminEmail,
       passwordHash,
       fullName: adminFullName,
+      primaryRole: adminRole,
       isActive: true,
     });
 

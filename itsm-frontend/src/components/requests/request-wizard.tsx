@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Check, Clock, Timer, User, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { CatalogVariableField } from "@/components/requests/catalog-variable-field";
 import { cn } from "@/lib/utils";
-import type { Catalog } from "@/types/catalog";
+import type { Catalog, CatalogVariable } from "@/types/catalog";
 
 export interface RequestedFor {
   mode: "self" | "other";
@@ -23,19 +23,58 @@ interface RequestWizardProps {
   onCancel?: () => void;
 }
 
-const STEPS = ["Request Details", "Additional Information", "Review & Confirm"] as const;
+interface StepGroup {
+  label: string;
+  fields: CatalogVariable[];
+}
 
-export function RequestWizard({ catalog, isSubmitting = false, onSubmit, onCancel }: RequestWizardProps) {
-  const allVariables = [...catalog.variables]
+const REVIEW_STEP = "Review & Confirm";
+
+/**
+ * Splits the catalog's active variables into wizard steps using the real
+ * form sections built in the admin editor (Employee Information, VPN Access
+ * Details, ...), in their configured order. Falls back to a simple
+ * required-first/optional-second split only for catalog items that don't
+ * have any sections defined (e.g. older items created before sections
+ * existed), so nothing regresses for those.
+ */
+function buildStepGroups(catalog: Catalog): StepGroup[] {
+  const allVariables = [...(catalog.variables ?? [])]
     .filter((v) => v.isActive)
     .sort((a, b) => a.sortOrder - b.sortOrder);
 
-  // The backend doesn't yet group variables into sections (no
-  // sectionName on the real data), so step 1 vs step 2 is split by
-  // isMandatory: required questions up front, optional ones after.
-  // If section metadata is added later, swap this line for a real grouping.
-  const detailFields = allVariables.filter((v) => v.isMandatory);
-  const additionalFields = allVariables.filter((v) => !v.isMandatory);
+  const sections = [...(catalog.sections ?? [])].sort((a, b) => a.displayOrder - b.displayOrder);
+
+  if (sections.length === 0) {
+    const detailFields = allVariables.filter((v) => v.isMandatory);
+    const additionalFields = allVariables.filter((v) => !v.isMandatory);
+    const groups: StepGroup[] = [{ label: "Request Details", fields: detailFields }];
+    if (additionalFields.length > 0) groups.push({ label: "Additional Information", fields: additionalFields });
+    return groups;
+  }
+
+  const groups: StepGroup[] = sections.map((s) => ({
+    label: s.name,
+    fields: allVariables.filter((v) => v.section?.sectionId === s.sectionId),
+  }));
+
+  const unsectioned = allVariables.filter((v) => !v.section?.sectionId);
+  if (unsectioned.length > 0) groups.push({ label: "Additional Information", fields: unsectioned });
+
+  // Sections can exist with no active variables yet — drop empty ones so
+  // the requester never lands on a blank step.
+  return groups.filter((g) => g.fields.length > 0);
+}
+
+export function RequestWizard({ catalog, isSubmitting = false, onSubmit, onCancel }: RequestWizardProps) {
+  const stepGroups = useMemo(() => buildStepGroups(catalog), [catalog]);
+  const allVariables = useMemo(
+    () => [...(catalog.variables ?? [])].filter((v) => v.isActive).sort((a, b) => a.sortOrder - b.sortOrder),
+    [catalog]
+  );
+  const STEPS = [...stepGroups.map((g) => g.label), REVIEW_STEP];
+  const reviewStepIndex = STEPS.length - 1;
+  const twoColumn = catalog.formLayout === "two-column";
 
   const [step, setStep] = useState(0);
   const [values, setValues] = useState<Record<number, string>>(() =>
@@ -49,14 +88,14 @@ export function RequestWizard({ catalog, isSubmitting = false, onSubmit, onCance
     setErrors((prev) => ({ ...prev, [id]: "" }));
   };
 
-  const validate = (fields: typeof allVariables) => {
+  const validate = (fields: CatalogVariable[], isFirstStep: boolean) => {
     const newErrors: Record<number, string> = {};
     for (const v of fields) {
       if (v.isMandatory && !values[v.variableId]?.trim()) {
         newErrors[v.variableId] = `${v.label} is required`;
       }
     }
-    if (requestedFor.mode === "other" && !requestedFor.name.trim()) {
+    if (isFirstStep && requestedFor.mode === "other" && !requestedFor.name.trim()) {
       newErrors[-1] = "Enter a name or email for who this request is for";
     }
     setErrors((prev) => ({ ...prev, ...newErrors }));
@@ -64,22 +103,24 @@ export function RequestWizard({ catalog, isSubmitting = false, onSubmit, onCance
   };
 
   const goNext = () => {
-    const fieldsForStep = step === 0 ? detailFields : additionalFields;
-    if (!validate(fieldsForStep)) return;
-    setStep((s) => Math.min(s + 1, STEPS.length - 1));
+    const group = stepGroups[step];
+    if (group && !validate(group.fields, step === 0)) return;
+    setStep((s) => Math.min(s + 1, reviewStepIndex));
   };
 
   const goBack = () => setStep((s) => Math.max(s - 1, 0));
 
   const handleSubmit = () => {
-    if (!validate(detailFields)) {
-      setStep(0);
-      return;
+    for (let i = 0; i < stepGroups.length; i++) {
+      if (!validate(stepGroups[i].fields, i === 0)) {
+        setStep(i);
+        return;
+      }
     }
     onSubmit(values, requestedFor);
   };
 
-  const answeredLabel = (v: (typeof allVariables)[number]) => values[v.variableId]?.trim() || "—";
+  const answeredLabel = (v: CatalogVariable) => values[v.variableId]?.trim() || "—";
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
@@ -119,9 +160,9 @@ export function RequestWizard({ catalog, isSubmitting = false, onSubmit, onCance
 
         <Card>
           <CardContent className="pt-5 space-y-5">
-            {step === 0 && (
+            {step < stepGroups.length && (
               <>
-                {catalog.allowRequestedFor && (
+                {step === 0 && catalog.allowRequestedFor && (
                   <div className="space-y-1.5">
                     <Label>Request For</Label>
                     <div className="flex gap-2">
@@ -163,78 +204,44 @@ export function RequestWizard({ catalog, isSubmitting = false, onSubmit, onCance
                   </div>
                 )}
 
-                {detailFields.length === 0 && (
-                  <p className="text-sm text-gray-500">No required details configured for this catalog item.</p>
-                )}
-                {detailFields.map((v) => (
-                  <CatalogVariableField
-                    key={v.variableId}
-                    variable={v}
-                    value={values[v.variableId]}
-                    error={errors[v.variableId]}
-                    onChange={(val) => set(v.variableId, val)}
-                  />
-                ))}
-              </>
-            )}
-
-            {step === 1 && (
-              <>
-                {additionalFields.length === 0 ? (
-                  <p className="text-sm text-gray-500">
-                    No additional information is needed for this request — you can go straight to review.
-                  </p>
+                {stepGroups[step].fields.length === 0 ? (
+                  <p className="text-sm text-gray-500">Nothing to fill in for this section.</p>
                 ) : (
-                  additionalFields.map((v) => (
-                    <CatalogVariableField
-                      key={v.variableId}
-                      variable={v}
-                      value={values[v.variableId]}
-                      error={errors[v.variableId]}
-                      onChange={(val) => set(v.variableId, val)}
-                    />
-                  ))
+                  <div className={cn(twoColumn ? "grid grid-cols-2 gap-x-5 gap-y-5" : "space-y-5")}>
+                    {stepGroups[step].fields.map((v) => (
+                      <CatalogVariableField
+                        key={v.variableId}
+                        variable={v}
+                        value={values[v.variableId]}
+                        error={errors[v.variableId]}
+                        onChange={(val) => set(v.variableId, val)}
+                      />
+                    ))}
+                  </div>
                 )}
               </>
             )}
 
-            {step === 2 && (
+            {step === reviewStepIndex && (
               <div className="space-y-4">
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-sm font-semibold text-slate-800">Request Details</p>
-                    <button type="button" onClick={() => setStep(0)} className="text-xs font-medium text-blue-600 hover:underline">
-                      Edit
-                    </button>
+                {catalog.allowRequestedFor && (
+                  <div>
+                    <dt className="text-xs text-slate-500">Requested For</dt>
+                    <dd className="text-sm font-medium text-slate-800">
+                      {requestedFor.mode === "self" ? "Myself" : requestedFor.name || "—"}
+                    </dd>
                   </div>
-                  <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    {catalog.allowRequestedFor && (
-                      <div>
-                        <dt className="text-xs text-slate-500">Requested For</dt>
-                        <dd className="font-medium text-slate-800">
-                          {requestedFor.mode === "self" ? "Myself" : requestedFor.name || "—"}
-                        </dd>
-                      </div>
-                    )}
-                    {detailFields.map((v) => (
-                      <div key={v.variableId}>
-                        <dt className="text-xs text-slate-500">{v.label}</dt>
-                        <dd className="font-medium text-slate-800 truncate">{answeredLabel(v)}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </div>
-
-                {additionalFields.length > 0 && (
-                  <div className="border-t border-slate-100 pt-4">
+                )}
+                {stepGroups.map((group, i) => (
+                  <div key={group.label} className={i > 0 ? "border-t border-slate-100 pt-4" : ""}>
                     <div className="mb-2 flex items-center justify-between">
-                      <p className="text-sm font-semibold text-slate-800">Additional Information</p>
-                      <button type="button" onClick={() => setStep(1)} className="text-xs font-medium text-blue-600 hover:underline">
+                      <p className="text-sm font-semibold text-slate-800">{group.label}</p>
+                      <button type="button" onClick={() => setStep(i)} className="text-xs font-medium text-blue-600 hover:underline">
                         Edit
                       </button>
                     </div>
                     <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                      {additionalFields.map((v) => (
+                      {group.fields.map((v) => (
                         <div key={v.variableId}>
                           <dt className="text-xs text-slate-500">{v.label}</dt>
                           <dd className="font-medium text-slate-800 truncate">{answeredLabel(v)}</dd>
@@ -242,7 +249,7 @@ export function RequestWizard({ catalog, isSubmitting = false, onSubmit, onCance
                       ))}
                     </dl>
                   </div>
-                )}
+                ))}
               </div>
             )}
 
@@ -259,7 +266,7 @@ export function RequestWizard({ catalog, isSubmitting = false, onSubmit, onCance
                   </Button>
                 )}
               </div>
-              {step < STEPS.length - 1 ? (
+              {step < reviewStepIndex ? (
                 <Button type="button" onClick={goNext}>
                   Next: {STEPS[step + 1]}
                 </Button>

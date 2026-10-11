@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, IsNull, LessThan, Not, In } from "typeorm";
+import { Repository, IsNull, LessThan, Not, In, Brackets } from "typeorm";
 import { Incident } from "./entities/incident.entity";
 import { IncidentActivity, ActivityType } from "./entities/incident-activity.entity";
 import { Category } from "../categories/entities/category.entity";
@@ -11,8 +11,13 @@ import { AssignmentGroup } from "../assignment-group/entities/assignment-group.e
 import { Location } from "../location/entities/location.entity";
 import { ServiceRequest } from "../requests/entities/request.entity";
 import { Priority } from "../priority/entities/priority.entity";
+import { CategoriesService } from "../categories/categories.service";
 import { CreateIncidentDto } from "./dto/create-incident.dto";
 import { UpdateIncidentDto } from "./dto/update-incident.dto";
+import { AdminIncidentQueryDto } from "./dto/admin-incident-query.dto";
+import { isStaff } from "../../common/utils/roles.util";
+import { RuleEngineService } from "../itsm-config/rule-engine.service";
+import { NotificationService } from "../itsm-config/notification.service";
 
 // Fallback SLA if the selected priority has no SLA minutes configured yet.
 const DEFAULT_RESPONSE_SLA_MINUTES = 30;
@@ -42,6 +47,9 @@ export class IncidentsService {
     @InjectRepository(Location) private locationRepo: Repository<Location>,
     @InjectRepository(ServiceRequest) private requestRepo: Repository<ServiceRequest>,
     @InjectRepository(Priority) private priorityRepo: Repository<Priority>,
+    private categoriesService: CategoriesService,
+    private rules: RuleEngineService,
+    private notifications: NotificationService,
   ) {}
 
   // ── ID generation ──────────────────────────────────────────────────────────
@@ -56,13 +64,59 @@ export class IncidentsService {
     return `INC${String(next).padStart(3, "0")}`;
   }
 
+  // ── SLA targets ────────────────────────────────────────────────────────────
+  /** Workgroup+Priority override (Configuration > SLA Matrix) wins over the Priority default. */
+  private async slaMinutesFor(priorityName: string, groupId?: number | null) {
+    const cfg = await this.priorityRepo.findOne({ where: { priorityName } });
+    const override = await this.rules.resolveSlaOverride(groupId, priorityName);
+    return {
+      response: override?.responseMinutes ?? cfg?.responseSlaMinutes ?? DEFAULT_RESPONSE_SLA_MINUTES,
+      resolution: override?.resolutionMinutes ?? cfg?.resolutionSlaMinutes ?? DEFAULT_RESOLUTION_SLA_MINUTES,
+    };
+  }
+
+  private async retargetSla(incident: Incident, priorityName: string, newGroupId?: number | null) {
+    const groupId = newGroupId !== undefined ? newGroupId : incident.assignmentGroup?.groupId;
+    const m = await this.slaMinutesFor(priorityName, groupId);
+    if (!incident.claimedAt) incident.slaResponseTarget = await this.rules.addSlaMinutes(incident.createdAt, m.response, groupId, incident.slaServiceWindowId);
+    if (!incident.resolvedAt) incident.slaResolutionTarget = await this.rules.addSlaMinutes(incident.createdAt, m.resolution, groupId, incident.slaServiceWindowId);
+    incident.slaWarningSent = false;
+  }
+
+  /** Chooses an assignee from a group's active members; null leaves the incident in the group queue. */
+  private async pickAssignee(groupId: number, preferredUserId: number | null, locationId: number | null, requesterLocation?: string | null): Promise<{ user: User; reason: string } | null> {
+    const group = await this.groupRepo.findOne({ where: { groupId }, relations: { members: true } });
+    const members = (group?.members ?? []).filter((m) => m.isActive);
+    if (!members.length) return null;
+    if (preferredUserId) {
+      const p = members.find((m) => m.userId === preferredUserId);
+      if (p) return { user: p, reason: "category's preferred member" };
+    }
+    let wanted = requesterLocation ?? null;
+    if (locationId) wanted = (await this.locationRepo.findOne({ where: { locationId } }))?.locationName ?? wanted;
+    if (!wanted) return null;
+    const local = members.filter((m) => (m.location ?? "").trim().toLowerCase() === wanted!.trim().toLowerCase());
+    if (!local.length) return null;
+    const loads = await Promise.all(local.map(async (m) => ({
+      m, n: await this.repo.count({ where: { assignedTo: { userId: m.userId }, status: Not(In(["Resolved", "Closed", "Cancelled"])) } }),
+    })));
+    loads.sort((a, b) => a.n - b.n || a.m.userId - b.m.userId);
+    return { user: loads[0].m, reason: `resolver at ${wanted}, fewest open incidents` };
+  }
+
   // ── Create ─────────────────────────────────────────────────────────────────
   async create(createdByUserId: number, dto: CreateIncidentDto, actorRoles: string[] = []): Promise<Incident> {
-    const createdBy = await this.userRepo.findOne({ where: { userId: createdByUserId } });
-    if (!createdBy) throw new NotFoundException(`User ${createdByUserId} not found`);
+    const actorIsStaff = actorRoles.some((r) => ["Admin", "Administrator", "Fulfiller", "IT Agent", "IT Manager", "Service Desk", "Engineer", "Agent"].includes(r));
+    // Anyone may pick the Caller (searchable field); the person who actually logged it is kept in loggedBy.
+    dto = await this.rules.applyLogIncidentFields(dto, actorIsStaff);
+    const effectiveCallerId = dto.callerId ?? createdByUserId;
+    const createdBy = await this.userRepo.findOne({ where: { userId: effectiveCallerId } });
+    if (!createdBy) throw new NotFoundException(`User ${effectiveCallerId} not found`);
 
     const incidentCode = await this.generateIncidentCode();
-    const priorityName = dto.priority ?? "Medium";
+    // Priority comes from the Impact × Urgency matrix. Staff may override it explicitly; for requesters the matrix wins.
+    const derivedPriority = await this.rules.derivePriority(dto.impact ?? "Medium", dto.urgency ?? "Medium");
+    const priorityName = actorIsStaff && dto.priority ? dto.priority : (derivedPriority ?? dto.priority ?? "Medium");
 
     // Response & Resolution SLA are defined per Priority level in Admin > Priority.
     // Fall back to a sane default if this priority hasn't had SLA minutes configured.
@@ -88,6 +142,10 @@ export class IncidentsService {
       businessService: dto.businessService,
       contactNumber: dto.contactNumber,
       department: dto.department,
+      classificationId: dto.classificationId ?? null,
+      contactType: dto.contactType ?? null,
+      callerEmail: dto.callerEmail ?? createdBy.email,
+      loggedBy: effectiveCallerId !== createdByUserId ? createdByUserId : null,
       slaResponseTarget,
       slaResolutionTarget,
     });
@@ -103,29 +161,61 @@ export class IncidentsService {
       incident.assignmentGroup = await this.groupRepo.findOne({ where: { groupId: dto.assignmentGroupId } }) || undefined;
     }
     
-    // Auto-assign to default group if no assignment group was set
+    // Routing: explicit (staff) > category's Default Assignment Group > category's Workgroup > system default group.
+    // Each category setting is inherited from the nearest ancestor that sets it.
+    const routing = dto.categoryId ? await this.categoriesService.getEffectiveRouting(dto.categoryId) : null;
     if (!incident.assignmentGroup) {
-      const defaultGroup = await this.groupRepo.findOne({ where: { isDefault: true } });
-      if (defaultGroup) {
-        incident.assignmentGroup = defaultGroup;
-      }
+      const gid = routing?.groupId ?? routing?.workgroupId ?? null;
+      const routedGroup = gid ? await this.groupRepo.findOne({ where: { groupId: gid } }) : null;
+      incident.assignmentGroup = routedGroup ?? (await this.groupRepo.findOne({ where: { isDefault: true } })) ?? undefined;
     }
 
     if (dto.locationId) incident.location = await this.locationRepo.findOne({ where: { locationId: dto.locationId } }) || undefined;
     if (dto.requestId) incident.request = await this.requestRepo.findOne({ where: { requestId: dto.requestId } }) || undefined;
     incident.createdBy = createdBy;
+    if (dto.slaServiceWindowId && actorIsStaff) incident.slaServiceWindowId = dto.slaServiceWindowId;
+    if (dto.assignedTo && actorIsStaff) {
+      const agent = await this.userRepo.findOne({ where: { userId: dto.assignedTo } });
+      if (!agent) throw new NotFoundException(`User ${dto.assignedTo} not found`);
+      incident.assignedTo = agent;
+      incident.status = "Assigned";
+      incident.claimedAt = now;
+    }
+
+    // Auto-assign a person when nobody was chosen: the category's preferred member, else a resolver at the
+    // incident's location (least-loaded), but only from the chosen group's active members.
+    let autoAssignNote: string | null = null;
+    if (!incident.assignedTo && incident.assignmentGroup) {
+      const pick = await this.pickAssignee(incident.assignmentGroup.groupId, routing?.memberId ?? null, dto.locationId ?? routing?.locationId ?? null, createdBy.location);
+      if (pick) {
+        incident.assignedTo = pick.user; incident.status = "Assigned"; incident.claimedAt = now;
+        autoAssignNote = `Auto-assigned to ${pick.user.fullName} (${pick.reason}).`;
+      }
+    }
+
+    // The SLA Matrix is keyed by workgroup, which is only known now.
+    const slaMins = await this.slaMinutesFor(priorityName, incident.assignmentGroup?.groupId);
+    const groupIdForSla = incident.assignmentGroup?.groupId;
+    incident.slaResponseTarget = await this.rules.addSlaMinutes(now, slaMins.response, groupIdForSla, incident.slaServiceWindowId);
+    incident.slaResolutionTarget = await this.rules.addSlaMinutes(now, slaMins.resolution, groupIdForSla, incident.slaServiceWindowId);
+    // Assigned at creation counts as an immediate response; otherwise it stays unmet until someone claims it.
+    incident.slaResponseMet = !!incident.claimedAt && (!incident.slaResponseTarget || incident.claimedAt <= incident.slaResponseTarget);
 
     const saved = await this.repo.save(incident);
 
     // Log creation activity
     await this.logActivity(saved, createdBy, "created", `Incident ${incidentCode} created.`);
+    if (autoAssignNote) await this.logActivity(saved, undefined, "assignment_change", autoAssignNote);
 
-    return this.findOne(saved.incidentId);
+    const created = await this.findOne(saved.incidentId);
+    void this.notifications.dispatch("created", created);
+    if (created.assignedTo) void this.notifications.dispatch("assigned", created);
+    return created;
   }
 
   // ── Queue — unassigned incidents for a group ───────────────────────────────
   async getGroupQueue(groupId: number, actorId: number, actorRoles: string[] = []): Promise<Incident[]> {
-    const isAdmin = actorRoles.includes("Admin") || actorRoles.includes("Administrator") || actorRoles.includes("Fulfiller");
+    const isAdmin = actorRoles.includes("Admin") || actorRoles.includes("Administrator");
     if (!isAdmin) {
       const isMember = await this.isGroupMember(groupId, actorId);
       if (!isMember) {
@@ -133,7 +223,11 @@ export class IncidentsService {
       }
     }
     return this.repo.find({
-      where: { assignmentGroup: { groupId }, assignedTo: IsNull() },
+      where: {
+        assignmentGroup: { groupId },
+        assignedTo: IsNull(),
+        status: Not(In(["Closed", "Resolved"])),
+      },
       relations: INCIDENT_RELATIONS,
       order: { createdAt: "DESC" },
     });
@@ -168,9 +262,11 @@ export class IncidentsService {
 
     incident.assignedTo = agent;
     incident.status = "Assigned";
-    incident.claimedAt = new Date();
-    // Response SLA is met if we claimed it before the response target passed.
-    incident.slaResponseMet = !incident.slaResponseTarget || incident.claimedAt <= incident.slaResponseTarget;
+    await this.retargetSla(incident, incident.priority as string, incident.assignmentGroup?.groupId);
+    if (!incident.claimedAt) {
+      incident.claimedAt = new Date();
+      incident.slaResponseMet = !incident.slaResponseTarget || incident.claimedAt <= incident.slaResponseTarget;
+    }
     const saved = await this.repo.save(incident);
 
     await this.logActivity(saved, agent, "claimed",
@@ -178,7 +274,9 @@ export class IncidentsService {
       { agentName: agent.fullName }
     );
 
-    return this.findOne(saved.incidentId);
+    const claimed = await this.findOne(saved.incidentId);
+    void this.notifications.dispatch("assigned", claimed);
+    return claimed;
   }
 
   /** Agent releases their claimed incident back to the group queue. Only the
@@ -200,7 +298,6 @@ export class IncidentsService {
     const previousAssignee = incident.assignedTo.fullName;
 
     incident.assignedTo = undefined;
-    incident.claimedAt = undefined;
     incident.status = "Open";
     const saved = await this.repo.save(incident);
 
@@ -222,6 +319,7 @@ export class IncidentsService {
     const prevName = incident.assignmentGroup?.groupName ?? "Unassigned";
 
     incident.assignmentGroup = group;
+    await this.retargetSla(incident, incident.priority as string, group.groupId);
     const saved = await this.repo.save(incident);
 
     if (prevName !== group.groupName) {
@@ -251,23 +349,35 @@ export class IncidentsService {
   @Cron(CronExpression.EVERY_MINUTE)
   async sweepSlaBreaches(): Promise<void> {
     const now = new Date();
-    const OPEN_STATUSES = ["Open", "Assigned", "In Progress", "On Hold"];
+    const OPEN_STATUSES = ["Open", "Assigned", "In Progress", "Pending Customer", "On Hold"];
 
-    const result = await this.repo
-      .createQueryBuilder()
-      .update(Incident)
-      .set({ slaBreached: true })
-      .where("status IN (:...openStatuses)", { openStatuses: OPEN_STATUSES })
-      .andWhere("sla_breached = false")
-      .andWhere(
-        "((sla_resolution_target IS NOT NULL AND sla_resolution_target < :now) OR " +
-          "(claimed_at IS NULL AND sla_response_target IS NOT NULL AND sla_response_target < :now))",
-        { now }
-      )
-      .execute();
+    // 1) Mark breaches (paused incidents are skipped; their clock isn't running).
+    const due = await this.repo.createQueryBuilder("i")
+      .where("i.status IN (:...openStatuses)", { openStatuses: OPEN_STATUSES })
+      .andWhere("i.sla_breached = false")
+      .andWhere("i.sla_paused_at IS NULL")
+      .andWhere("((i.sla_resolution_target IS NOT NULL AND i.sla_resolution_target < :now) OR (i.claimed_at IS NULL AND i.sla_response_target IS NOT NULL AND i.sla_response_target < :now))", { now })
+      .getMany();
+    for (const inc of due) {
+      await this.repo.update({ incidentId: inc.incidentId }, { slaBreached: true });
+      await this.logActivity(inc, undefined, "sla_breached", `SLA breached for ${inc.incidentCode ?? inc.incidentId}.`);
+    }
+    if (due.length) this.logger.log(`SLA sweep: marked ${due.length} incident(s) as breached.`);
 
-    if ((result.affected ?? 0) > 0) {
-      this.logger.log(`SLA sweep: marked ${result.affected} incident(s) as breached.`);
+    // 2) Early warning, once per target: within the lesser of 60 minutes or 20% of the total resolution time.
+    const candidates = await this.repo.createQueryBuilder("i")
+      .leftJoinAndSelect("i.assignedTo", "assignedTo").leftJoinAndSelect("i.assignmentGroup", "assignmentGroup").leftJoinAndSelect("i.createdBy", "createdBy")
+      .where("i.status IN (:...openStatuses)", { openStatuses: OPEN_STATUSES })
+      .andWhere("i.sla_breached = false AND i.sla_warning_sent = false AND i.sla_paused_at IS NULL AND i.sla_resolution_target IS NOT NULL")
+      .andWhere("i.sla_resolution_target > :now", { now })
+      .getMany();
+    for (const inc of candidates) {
+      const total = new Date(inc.slaResolutionTarget!).getTime() - new Date(inc.createdAt).getTime();
+      const window = Math.min(60 * 60 * 1000, total * 0.2);
+      if (new Date(inc.slaResolutionTarget!).getTime() - now.getTime() <= window) {
+        await this.repo.update({ incidentId: inc.incidentId }, { slaWarningSent: true });
+        void this.notifications.dispatch("slaBreachWarning", inc);
+      }
     }
   }
 
@@ -277,6 +387,7 @@ export class IncidentsService {
       where: [
         { createdBy: { userId } },
         { assignedTo: { userId } },
+        { loggedBy: userId },
       ],
       relations: INCIDENT_RELATIONS,
       order: { createdAt: "DESC" },
@@ -285,7 +396,7 @@ export class IncidentsService {
 
   findAssignedToUser(userId: number): Promise<Incident[]> {
     return this.repo.find({
-      where: { assignedTo: { userId } },
+      where: { assignedTo: { userId }, status: Not(In(["Closed", "Resolved"])) },
       relations: INCIDENT_RELATIONS,
       order: { createdAt: "DESC" },
     });
@@ -298,21 +409,66 @@ export class IncidentsService {
     });
   }
 
-  /** Returns all incidents for any group the user is a member of.
-   *  Used by Engineers and Service Desk to see their workgroup queue. */
-  async findForWorkgroup(userId: number): Promise<Incident[]> {
-    // Find all groups the user is a member of
-    const groups = await this.groupRepo.find({
-      relations: { members: true },
+  findFiltered(filter: { groupId?: number; assignedToUserId?: number; openOnly?: boolean }): Promise<Incident[]> {
+    const where: any = {};
+    if (filter.groupId) where.assignmentGroup = { groupId: filter.groupId };
+    if (filter.assignedToUserId) where.assignedTo = { userId: filter.assignedToUserId };
+    if (filter.openOnly) where.status = Not(In(["Closed", "Resolved"]));
+    return this.repo.find({
+      where,
+      relations: INCIDENT_RELATIONS,
+      order: { createdAt: "DESC" },
     });
-    const userGroupIds = groups
-      .filter((g) => g.members?.some((m) => m.userId === userId))
-      .map((g) => g.groupId);
+  }
 
-    if (userGroupIds.length === 0) {
-      // Fallback: show incidents created by or assigned to this user
-      return this.findAllForUser(userId);
+  findAdminList(query: AdminIncidentQueryDto): Promise<Incident[]> {
+    const builder = this.repo.createQueryBuilder("incident")
+      .leftJoinAndSelect("incident.category", "category")
+      .leftJoinAndSelect("incident.subCategory", "subCategory")
+      .leftJoinAndSelect("incident.assignedTo", "assignedTo")
+      .leftJoinAndSelect("incident.assignmentGroup", "assignmentGroup")
+      .leftJoinAndSelect("assignmentGroup.manager", "groupManager")
+      .leftJoinAndSelect("incident.createdBy", "createdBy")
+      .leftJoinAndSelect("incident.location", "location")
+      .leftJoinAndSelect("incident.request", "request")
+      .orderBy("incident.createdAt", "DESC");
+
+    if (query.search?.trim()) {
+      const search = `%${query.search.trim().toLowerCase()}%`;
+      builder.andWhere(new Brackets((where) => where
+        .where("LOWER(incident.incidentId) LIKE :search", { search })
+        .orWhere("LOWER(incident.title) LIKE :search", { search })
+        .orWhere("LOWER(category.categoryName) LIKE :search", { search })
+        .orWhere("LOWER(assignmentGroup.groupName) LIKE :search", { search })
+        .orWhere("LOWER(assignedTo.fullName) LIKE :search", { search })
+        .orWhere("LOWER(createdBy.fullName) LIKE :search", { search })
+      ));
     }
+    if (query.status) builder.andWhere("incident.status = :status", { status: query.status });
+    if (query.priority) builder.andWhere("incident.priority = :priority", { priority: query.priority });
+    if (query.impact) builder.andWhere("incident.impact = :impact", { impact: query.impact });
+    if (query.urgency) builder.andWhere("incident.urgency = :urgency", { urgency: query.urgency });
+    if (query.categoryId) builder.andWhere("category.categoryId = :categoryId", { categoryId: query.categoryId });
+    if (query.subCategoryId) builder.andWhere("subCategory.subCategoryId = :subCategoryId", { subCategoryId: query.subCategoryId });
+    if (query.assignmentGroupId) builder.andWhere("assignmentGroup.groupId = :assignmentGroupId", { assignmentGroupId: query.assignmentGroupId });
+    if (query.assignedToId) builder.andWhere("assignedTo.userId = :assignedToId", { assignedToId: query.assignedToId });
+    if (query.createdById) builder.andWhere("createdBy.userId = :createdById", { createdById: query.createdById });
+    if (query.locationId) builder.andWhere("location.locationId = :locationId", { locationId: query.locationId });
+    if (query.createdFrom) builder.andWhere("incident.createdAt >= :createdFrom", { createdFrom: query.createdFrom });
+    if (query.createdTo) builder.andWhere("incident.createdAt <= :createdTo", { createdTo: `${query.createdTo}T23:59:59.999Z` });
+    if (query.slaBreached !== undefined) builder.andWhere("incident.slaBreached = :slaBreached", { slaBreached: query.slaBreached });
+
+    return builder.getMany();
+  }
+
+  /** Returns incidents only for the user's assigned workgroups. */
+  async findForWorkgroup(userId: number): Promise<Incident[]> {
+    const groups = await this.groupRepo.find({ relations: { members: true } });
+    const userGroupIds = groups
+      .filter((group) => group.members?.some((member) => member.userId === userId))
+      .map((group) => group.groupId);
+
+    if (userGroupIds.length === 0) return [];
 
     return this.repo.find({
       where: userGroupIds.map((groupId) => ({ assignmentGroup: { groupId } })),
@@ -340,9 +496,82 @@ export class IncidentsService {
   }
 
   // ── Update ─────────────────────────────────────────────────────────────────
-  async update(incidentId: string, dto: UpdateIncidentDto, actorId?: number): Promise<Incident> {
+  async update(
+    incidentId: string,
+    dto: UpdateIncidentDto,
+    actorId?: number,
+    actorRoles?: string[],
+  ): Promise<Incident> {
+    const external = Array.isArray(actorRoles);        // internal callers (resolve, resume-sla, …) omit roles and are trusted
+    actorRoles = actorRoles ?? [];
+    // Engineers may edit every other incident field/option, but the
+    // Description is locked once the incident is logged — enforced here so
+    // it can't be bypassed by calling the API directly (UI also disables
+    // the field, see IncidentDetailPage).
+    const isEngineerOnly =
+      actorRoles.includes("Engineer") &&
+      !actorRoles.some((r) => ["Admin", "Administrator", "IT Manager", "Service Desk"].includes(r));
+    if (isEngineerOnly && dto.description !== undefined) {
+      throw new ForbiddenException("Engineers cannot modify the incident Description.");
+    }
+
+    // Priority / Impact / Urgency / Status are NOT NULL columns: a blank or null ("None") means "no change", never "clear it".
+    for (const k of ["priority", "impact", "urgency", "status"] as const) {
+      const v = (dto as any)[k];
+      if (v === null || (typeof v === "string" && !v.trim())) delete (dto as any)[k];
+    }
     const incident = await this.findOne(incidentId);
+    if (external && !isStaff(actorRoles)) this.assertRequesterMayPatch(incident, dto, actorId);
     const actor = actorId ? await this.userRepo.findOne({ where: { userId: actorId } }) || undefined : undefined;
+
+    if ((dto.impact !== undefined || dto.urgency !== undefined) && dto.priority === undefined) {
+      const derived = await this.rules.derivePriority(dto.impact ?? incident.impact, dto.urgency ?? incident.urgency);
+      if (derived && derived !== incident.priority) dto.priority = derived;
+    }
+
+    // ── Configuration-driven rules (reject BEFORE anything is changed) ──
+    const prevStatus = incident.status;
+    const prevAssigneeId = incident.assignedTo?.userId ?? null;
+    const statusChanging = !!dto.status && dto.status !== prevStatus;
+    let approvalsToConsume: Awaited<ReturnType<RuleEngineService["assertApproval"]>> = [];
+    // Only the Caller (the user the incident was raised for) may close it; resolvers resolve, the caller confirms.
+    if (statusChanging && dto.status === "Closed" && external && incident.createdBy?.userId !== actorId) {
+      throw new ForbiddenException("Only the Caller of this incident can close it.");
+    }
+    if (statusChanging) {
+      await this.rules.assertTransitionAllowed(prevStatus, dto.status!);
+      const action = this.rules.lifecycleAction(prevStatus, dto.status!);
+      if (action) approvalsToConsume = await this.rules.assertApproval(incident, action, actorId);
+    }
+    await this.rules.assertMandatoryFields(incident, {
+      status: dto.status, priority: dto.priority, urgency: dto.urgency, impact: dto.impact,
+      categoryId: dto.categoryId, assignedTo: dto.assignedTo, groupId: dto.groupId,
+      resolutionNotes: dto.resolutionNotes, closureCode: dto.closureCode, feedbackRating: dto.feedbackRating,
+      pendingReason: dto.pendingReason, classificationId: dto.classificationId, onHoldReason: dto.onHoldReason,
+    });
+
+    // Leaving a paused status pushes the Resolution target out by the time spent paused.
+    if (statusChanging && incident.slaPausedAt) {
+      const pausedMs = Date.now() - new Date(incident.slaPausedAt).getTime();
+      if (incident.slaResolutionTarget) incident.slaResolutionTarget = new Date(new Date(incident.slaResolutionTarget).getTime() + pausedMs);
+      incident.slaWarningSent = false;
+      incident.slaPausedAt = null;
+    }
+    // Entering On Hold / Pending Customer: the chosen reason decides whether the clock pauses.
+    if (statusChanging && this.rules.isPausingStatus(dto.status!)) {
+      const holdReason = dto.onHoldReason !== undefined ? dto.onHoldReason : incident.onHoldReason;
+      const pendReason = dto.pendingReason !== undefined ? dto.pendingReason : incident.pendingReason;
+      if (await this.rules.statusPausesSla(dto.status!, holdReason, pendReason)) incident.slaPausedAt = new Date();
+    }
+    if (statusChanging && dto.status === "Resolved") {
+      await this.rules.assertResolveGates(incident.incidentId);
+      if (external) await this.rules.assertResolutionCode(dto.resolutionCode, incident.resolutionCode);
+    }
+    if (dto.feedbackRating !== undefined && dto.feedbackRating !== incident.feedbackRating) {
+      incident.feedbackSubmittedAt = dto.feedbackRating == null ? null : new Date();
+      incident.feedbackModeratedAt = null; incident.feedbackModeratedBy = null;
+      incident.feedbackPublished = false; incident.feedbackFlagged = false;
+    }
 
     if (dto.status && dto.status !== incident.status) {
       await this.logActivity(incident, actor, "status_change",
@@ -356,6 +585,11 @@ export class IncidentsService {
         if (incident.slaResolutionTarget && incident.resolvedAt > incident.slaResolutionTarget) {
           incident.slaBreached = true;
         }
+      } else if (dto.status === "Closed") {
+        incident.closedAt = new Date();
+      } else if (dto.status === "Open") {
+        incident.resolvedAt = undefined;
+        incident.closedAt = undefined;
       }
     }
 
@@ -371,6 +605,19 @@ export class IncidentsService {
         );
       }
       incident.assignedTo = newAgent;
+      // First assignment is the response: record it so the Response SLA can be judged.
+      if (newAgent && !incident.claimedAt) {
+        incident.claimedAt = new Date();
+        incident.slaResponseMet = !incident.slaResponseTarget || incident.claimedAt <= incident.slaResponseTarget;
+      }
+    }
+
+    if (dto.slaServiceWindowId !== undefined && (dto.slaServiceWindowId ?? null) !== (incident.slaServiceWindowId ?? null)) {
+      incident.slaServiceWindowId = dto.slaServiceWindowId ?? null;
+      await this.logActivity(incident, actor, "sla_window_change",
+        dto.slaServiceWindowId ? `SLA service window changed (id ${dto.slaServiceWindowId}).` : "SLA service window reset to the workgroup default.");
+      // Re-anchor both targets on the new window, using the priority/group this same save may also change.
+      await this.retargetSla(incident, (dto.priority ?? incident.priority) as string, dto.groupId);
     }
 
     if (dto.priority && dto.priority !== incident.priority) {
@@ -378,22 +625,73 @@ export class IncidentsService {
         `Priority changed from ${incident.priority} to ${dto.priority}.`,
         { from: incident.priority, to: dto.priority }
       );
-      // Re-target the Response & Resolution SLA against the new priority's
-      // configured minutes (still anchored to when the incident was created).
-      const newPriorityConfig = await this.priorityRepo.findOne({ where: { priorityName: dto.priority } });
-      const responseSlaMinutes = newPriorityConfig?.responseSlaMinutes ?? DEFAULT_RESPONSE_SLA_MINUTES;
-      const resolutionSlaMinutes = newPriorityConfig?.resolutionSlaMinutes ?? DEFAULT_RESOLUTION_SLA_MINUTES;
-      if (!incident.claimedAt) {
-        incident.slaResponseTarget = new Date(incident.createdAt.getTime() + responseSlaMinutes * 60 * 1000);
-      }
-      if (!incident.resolvedAt) {
-        incident.slaResolutionTarget = new Date(incident.createdAt.getTime() + resolutionSlaMinutes * 60 * 1000);
-      }
+      // Re-target Response & Resolution SLA (SLA Matrix override > Priority default),
+      // still anchored to when the incident was created.
+      await this.retargetSla(incident, dto.priority, dto.groupId);
     }
 
-    const { assignedTo, assignmentGroupId, ...rest } = dto as any;
+    if (dto.urgency && dto.urgency !== incident.urgency) {
+      await this.logActivity(incident, actor, "urgency_change",
+        `Urgency changed from ${incident.urgency} to ${dto.urgency}.`,
+        { from: incident.urgency, to: dto.urgency }
+      );
+    }
+
+    if (dto.impact && dto.impact !== incident.impact) {
+      await this.logActivity(incident, actor, "impact_change",
+        `Impact changed from ${incident.impact} to ${dto.impact}.`,
+        { from: incident.impact, to: dto.impact }
+      );
+    }
+
+    if (dto.categoryId !== undefined) {
+      incident.category = (await this.categoryRepo.findOne({ where: { categoryId: dto.categoryId } })) || undefined;
+    }
+    if (dto.subCategoryId !== undefined) {
+      incident.subCategory =
+        (await this.subCategoryRepo.findOne({ where: { subCategoryId: dto.subCategoryId } })) || undefined;
+    }
+    if (dto.groupId !== undefined) {
+      const newGroup = dto.groupId
+        ? (await this.groupRepo.findOne({ where: { groupId: dto.groupId } })) || undefined
+        : undefined;
+      const prevName = incident.assignmentGroup?.groupName ?? "Unassigned";
+      const newGroupName = newGroup?.groupName ?? "Unassigned";
+      if (prevName !== newGroupName) {
+        await this.logActivity(incident, actor, "assignment_change",
+          `Assignment group changed from ${prevName} to ${newGroupName}.`,
+          { from: prevName, to: newGroupName }
+        );
+      }
+      incident.assignmentGroup = newGroup;
+      if (!dto.priority && prevName !== newGroupName) {
+        await this.retargetSla(incident, incident.priority as string, newGroup?.groupId ?? null);
+      }
+    }
+    if (dto.locationId !== undefined) {
+      incident.location = (await this.locationRepo.findOne({ where: { locationId: dto.locationId } })) || undefined;
+    }
+
+    const { assignedTo, categoryId, subCategoryId, groupId, locationId, ...rest } = dto as any;
     Object.assign(incident, rest);
-    return this.repo.save(incident);
+    const saved = await this.repo.save(incident);
+    await this.rules.consume(approvalsToConsume);
+
+    // Anyone newly put on the incident hears about it, even when the status label doesn't change.
+    const assigneeChanged = (saved.assignedTo?.userId ?? null) !== prevAssigneeId && !!saved.assignedTo;
+    if (assigneeChanged && !(statusChanging && dto.status === "Assigned")) void this.notifications.dispatch("assigned", saved);
+
+    if (statusChanging && dto.status) {
+      const event: Record<string, string> = {
+        Resolved: "resolved", Closed: "closed", "On Hold": "onHold", "Pending Customer": "pendingCustomer", Assigned: "assigned",
+      };
+      const e = this.rules.lifecycleAction(prevStatus, dto.status) === "Reopen" ? "reopened" : (event[dto.status] ?? (this.rules.isPendingStatus(dto.status) ? "pendingCustomer" : undefined));
+      if (e) void this.notifications.dispatch(e, saved);
+      // Dispatch status-specific trigger events so rules configured for "Open", "Assigned", "In Progress", etc. fire
+      void this.notifications.dispatch(dto.status, saved);
+      void this.notifications.dispatch(`status:${dto.status}`, saved);
+    }
+    return saved;
   }
 
   async remove(incidentId: string): Promise<void> {
@@ -402,13 +700,51 @@ export class IncidentsService {
   }
 
   // ── Activity / conversation ────────────────────────────────────────────────
-  async getActivity(incidentId: string): Promise<IncidentActivity[]> {
-    await this.findOne(incidentId);
-    return this.activityRepo.find({
+  // The frontend's IncidentActivity type expects the acting user under the
+  // `author` key; the entity itself models it as `actor` (matches the
+  // actor_id column/relation name). Map at the boundary rather than
+  // renaming the entity everywhere.
+  private toActivityDto(a: IncidentActivity) {
+    const { actor, ...rest } = a;
+    return {
+      ...rest,
+      author: actor ? { userId: actor.userId, fullName: actor.fullName } : null,
+    };
+  }
+
+  /** Requesters may only confirm-and-close, reopen or rate their own resolved incident — nothing else. */
+  private assertRequesterMayPatch(incident: Incident, dto: UpdateIncidentDto, actorId?: number): void {
+    if (incident.createdBy?.userId !== actorId) throw new ForbiddenException("You don't have access to this incident.");
+    const allowed = new Set(["status", "feedbackRating", "feedbackComment", "closureCode"]);
+    const illegal = Object.keys(dto).filter((k) => (dto as any)[k] !== undefined && !allowed.has(k));
+    if (illegal.length) throw new ForbiddenException(`Requesters can't change ${illegal.join(", ")}. Contact the support team instead.`);
+    if (dto.status !== undefined && dto.status !== incident.status) {
+      if (incident.status !== "Resolved" || !["Closed", "Open"].includes(dto.status)) {
+        throw new ForbiddenException("You can only close or reopen an incident once it has been resolved.");
+      }
+    }
+  }
+
+  /** A requester may only touch incidents they reported; staff may touch any. */
+  async assertCanAccess(incidentId: string, userId: number | undefined, roles: string[] | undefined): Promise<Incident> {
+    const incident = await this.findOne(incidentId);
+    if (!isStaff(roles) && incident.createdBy?.userId !== userId && incident.loggedBy !== userId) {
+      throw new ForbiddenException("You don't have access to this incident.");
+    }
+    return incident;
+  }
+
+  /** When `viewer` is given the caller is an external user: requesters never see internal work notes. */
+  async getActivity(incidentId: string, viewer?: { userId: number; roles: string[] }): Promise<ReturnType<IncidentsService["toActivityDto"]>[]> {
+    if (viewer) await this.assertCanAccess(incidentId, viewer.userId, viewer.roles);
+    else await this.findOne(incidentId);
+    const activities = await this.activityRepo.find({
       where: { incident: { incidentId } },
       relations: { actor: true },
       order: { createdAt: "ASC" },
     });
+    const visible = viewer && !isStaff(viewer.roles) ? activities.filter((a) => !a.isWorkNote && a.type !== "work_note") : activities;
+    return visible.map((a) => this.toActivityDto(a));
   }
 
   async addComment(
@@ -416,8 +752,11 @@ export class IncidentsService {
     actorId: number,
     content: string,
     isWorkNote = false,
-  ): Promise<IncidentActivity> {
-    const incident = await this.findOne(incidentId);
+    roles?: string[],
+  ): Promise<ReturnType<IncidentsService["toActivityDto"]>> {
+    const external = Array.isArray(roles);
+    const incident = external ? await this.assertCanAccess(incidentId, actorId, roles) : await this.findOne(incidentId);
+    if (external && !isStaff(roles)) isWorkNote = false;      // requesters can never write internal notes
     const actor = await this.userRepo.findOne({ where: { userId: actorId } });
     if (!actor) throw new NotFoundException(`User ${actorId} not found`);
     const activity = this.activityRepo.create({
@@ -427,7 +766,9 @@ export class IncidentsService {
     });
     activity.incident = incident;
     activity.actor = actor;
-    return this.activityRepo.save(activity);
+    const saved = await this.activityRepo.save(activity);
+    saved.actor = actor;
+    return this.toActivityDto(saved);
   }
 
   private async logActivity(

@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Put,
   Delete,
   Body,
   Param,
@@ -17,6 +18,9 @@ import { WorkflowsService } from "./workflows.service";
 import { CreateWorkflowDto } from "./dto/create-workflow.dto";
 import { UpdateWorkflowDto } from "./dto/update-workflow.dto";
 import { CreateWorkflowStepDto } from "./dto/create-workflow-step.dto";
+import { UpdateWorkflowStepDto } from "./dto/update-workflow-step.dto";
+import { UpdateWorkflowTransitionsDto } from "./dto/update-workflow-transitions.dto";
+import { ReplaceWorkflowStepApprovalLevelsDto } from "./dto/workflow-step-approval-level.dto";
 
 @ApiTags("workflows")
 @ApiBearerAuth()
@@ -35,6 +39,12 @@ export class WorkflowsController {
   @Roles("Admin")
   findAll() {
     return this.workflowsService.findAll();
+  }
+
+  @Get("activity-definitions")
+  @Roles("Admin")
+  getActivityDefinitions() {
+    return this.workflowsService.getActivityDefinitions();
   }
 
   @Get(":workflowId")
@@ -74,5 +84,54 @@ export class WorkflowsController {
     @Param("workflowStepId", ParseIntPipe) workflowStepId: number
   ) {
     return this.workflowsService.removeStep(workflowId, workflowStepId);
+  }
+
+  @Patch(":workflowId/steps/:workflowStepId")
+  @Roles("Admin")
+  updateStep(
+    @Param("workflowId", ParseIntPipe) workflowId: number,
+    @Param("workflowStepId", ParseIntPipe) workflowStepId: number,
+    @Body() dto: UpdateWorkflowStepDto
+  ) {
+    return this.workflowsService.updateStep(workflowId, workflowStepId, dto);
+  }
+
+  @Get(":workflowId/steps/:workflowStepId/approval-levels")
+  @Roles("Admin")
+  getApprovalLevels(
+    @Param("workflowId", ParseIntPipe) workflowId: number,
+    @Param("workflowStepId", ParseIntPipe) workflowStepId: number
+  ) {
+    return this.workflowsService.getApprovalLevels(workflowId, workflowStepId);
+  }
+
+  @Put(":workflowId/steps/:workflowStepId/approval-levels")
+  @Roles("Admin")
+  replaceApprovalLevels(
+    @Param("workflowId", ParseIntPipe) workflowId: number,
+    @Param("workflowStepId", ParseIntPipe) workflowStepId: number,
+    @Body() dto: ReplaceWorkflowStepApprovalLevelsDto
+  ) {
+    return this.workflowsService.replaceApprovalLevels(workflowId, workflowStepId, dto.levels);
+  }
+
+  @Patch(":workflowId/steps/:workflowStepId/reorder")
+  @Roles("Admin")
+  reorderStep(
+    @Param("workflowId", ParseIntPipe) workflowId: number,
+    @Param("workflowStepId", ParseIntPipe) workflowStepId: number,
+    @Body() dto: { newOrder: number }
+  ) {
+    return this.workflowsService.reorderStep(workflowId, workflowStepId, dto.newOrder);
+  }
+
+  @Patch(":workflowId/steps/:workflowStepId/transitions")
+  @Roles("Admin")
+  updateTransitions(
+    @Param("workflowId", ParseIntPipe) workflowId: number,
+    @Param("workflowStepId", ParseIntPipe) workflowStepId: number,
+    @Body() dto: UpdateWorkflowTransitionsDto
+  ) {
+    return this.workflowsService.updateTransitions(workflowId, workflowStepId, dto);
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Users, Inbox } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -13,6 +13,8 @@ import { useAdminAssignmentGroup } from "@/lib/hooks/use-admin-modules";
 import { useIncidents, useGroupQueue } from "@/lib/hooks/use-incidents";
 import { IncidentsApi, Incident } from "@/lib/api/incidents.api";
 import { useToast } from "@/lib/hooks/use-toast";
+import { CategoriesApi } from "@/lib/api/categories.api";
+import { Category } from "@/types/admin";
 
 function priorityColor(p: string) {
   return p === "Critical" ? "bg-red-100 text-red-700"
@@ -107,10 +109,13 @@ function GroupQueuePanel({ groupId, groupName }: { groupId: number; groupName: s
   );
 }
 
+const ALL_STATUSES = ["Open", "Assigned", "In Progress", "On Hold"];
+
 export default function IncidentQueuePage() {
   const { user } = useAuth();
   const { items: groups, isLoading: groupsLoading } = useAdminAssignmentGroup();
   const { incidents: myIncidents, isLoading: mineLoading } = useIncidents("assigned");
+  const [categories, setCategories] = useState<Category[]>([]);
 
   const myGroups = useMemo(
     () => groups.filter((g) => g.isActive && g.members.some((m) => m.userId === user?.userId)),
@@ -120,7 +125,45 @@ export default function IncidentQueuePage() {
   const [tab, setTab] = useState<"mine" | number>("mine");
   const activeGroup = typeof tab === "number" ? myGroups.find((g) => g.groupId === tab) : null;
 
+  // The tab badge and default "mine" list stay scoped to what's actually
+  // still open (excluding Closed & Resolved) — the filter below is purely
+  // an opt-in way to widen that view, e.g. to check on a Resolved ticket.
   const openMine = myIncidents.filter((i) => i.status !== "Resolved" && i.status !== "Closed");
+
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+
+  // Load categories for filtering
+  useEffect(() => {
+    CategoriesApi.list().then((c: Category[]) => setCategories(c.filter((x) => x.isActive))).catch(() => {});
+  }, []);
+
+  const filteredMine = useMemo(() => {
+    return myIncidents.filter((i) => {
+      // Always exclude Closed and Resolved tickets regardless of filter
+      if (i.status === "Resolved" || i.status === "Closed") {
+        return false;
+      }
+      // Apply status filter if selected
+      if (statusFilter && i.status !== statusFilter) {
+        return false;
+      }
+      // Apply category filter if selected
+      if (categoryFilter && i.category?.categoryId !== Number(categoryFilter)) {
+        return false;
+      }
+      const created = new Date(i.createdAt).getTime();
+      if (dateFrom && created < new Date(dateFrom).getTime()) return false;
+      if (dateTo && created > new Date(dateTo).getTime() + 24 * 60 * 60 * 1000 - 1) return false;
+      return true;
+    });
+  }, [myIncidents, statusFilter, categoryFilter, dateFrom, dateTo]);
+
+  const hasActiveFilter = !!(statusFilter || categoryFilter || dateFrom || dateTo);
+  const clearFilters = () => { setStatusFilter(""); setCategoryFilter(""); setDateFrom(""); setDateTo(""); };
+
 
   return (
     <div className="w-full">
@@ -143,7 +186,7 @@ export default function IncidentQueuePage() {
                 tab === "mine" ? "border-brand-600 text-brand-600" : "border-transparent text-slate-500 hover:text-slate-700"
               }`}
             >
-              <Inbox className="size-4" /> My Queue
+              <Inbox className="size-4" /> Assigned to Me
               <Badge variant="gray">{openMine.length}</Badge>
             </button>
             {myGroups.map((g) => (
@@ -165,17 +208,79 @@ export default function IncidentQueuePage() {
             </p>
           )}
 
+          {tab === "mine" && (
+            <div className="mt-4 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">Status</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                >
+                  <option value="">All open statuses</option>
+                  {ALL_STATUSES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">Category</label>
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                >
+                  <option value="">All categories</option>
+                  {categories.map((c) => (
+                    <option key={c.categoryId} value={c.categoryId}>{c.categoryName}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">From</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">To</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+                />
+              </div>
+              {hasActiveFilter && (
+                <button
+                  onClick={clearFilters}
+                  className="rounded-md px-2 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50"
+                >
+                  Clear filters
+                </button>
+              )}
+              <span className="ml-auto text-xs text-slate-400">
+                Showing {filteredMine.length} of {myIncidents.length} assigned to you
+              </span>
+            </div>
+          )}
+
           <Card className="mt-4">
             {tab === "mine" ? (
               mineLoading ? (
                 <PageSpinner />
-              ) : openMine.length === 0 ? (
+              ) : filteredMine.length === 0 ? (
                 <p className="px-5 py-10 text-center text-sm text-slate-400">
-                  You have no open incidents. Pick one up from a group queue above.
+                  {hasActiveFilter
+                    ? "No incidents match the selected filters."
+                    : "You have no open incidents. Pick one up from a group queue above."}
                 </p>
               ) : (
                 <div className="divide-y">
-                  {openMine.map((inc) => (
+                  {filteredMine.map((inc) => (
                     <QueueRow key={inc.incidentId} inc={inc} />
                   ))}
                 </div>

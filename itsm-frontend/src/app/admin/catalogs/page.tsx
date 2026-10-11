@@ -2,31 +2,31 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Pencil, Trash2, Eye } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
 import { DataTable, Column } from "@/components/admin/data-table";
-import { CatalogFormDialog } from "@/components/admin/catalog-form-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useCatalogs } from "@/lib/hooks/use-catalogs";
-import { useAdminCategories, useAdminWorkflows } from "@/lib/hooks/use-admin";
 import { Catalog } from "@/types/catalog";
 
+// "+ Add Catalog Item" and the row edit action both go straight to the full
+// Catalog Item editor (/admin/catalogs/create and /admin/catalogs/[id]) —
+// the tabbed editor with Item Details/Variables/Workflow/etc. There used to
+// be a second, separate quick-create dialog (CatalogFormDialog) wired to
+// this page that only exposed a handful of fields; it's been removed so
+// there's one consistent place to create and edit a catalog item instead of
+// two different UIs doing overlapping things.
 export default function AdminCatalogsPage() {
-  const { catalogs, isLoading, create, update, remove } = useCatalogs("all");
-  const { categories } = useAdminCategories();
-  const { workflows } = useAdminWorkflows();
-  const [dialog, setDialog] = useState(false);
-  const [editCatalog, setEditCatalog] = useState<Catalog | null>(null);
+  const { catalogs, isLoading, remove } = useCatalogs("all");
   const [deleteCatalog, setDeleteCatalog] = useState<Catalog | null>(null);
-  const [saving, setSaving] = useState(false);
 
   const columns: Column<Catalog>[] = [
-    { key: "catalogName", label: "Name", sortable: true,
+    { key: "catalogName", label: "Catalog Name", sortable: true,
       render: (c) => <span className="font-medium">{c.catalogName}</span> },
-    { key: "category", label: "Category",
-      render: (c) => <span className="text-slate-500">{c.category?.categoryName ?? "Uncategorized"}</span> },
+    { key: "serviceCategory", label: "Category",
+      render: (c) => <span className="text-slate-500">{c.serviceCategory?.categoryName ?? c.category?.categoryName ?? "Uncategorized"}</span> },
     { key: "workflow", label: "Workflow",
       render: (c) => <span className="text-slate-500">{c.workflow?.workflowName ?? "None"}</span> },
     { key: "isActive", label: "Status",
@@ -40,15 +40,11 @@ export default function AdminCatalogsPage() {
       render: (c) => (
         <div className="flex gap-1">
           <Link href={`/admin/catalogs/${c.catalogId}`}
-            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600" title="Edit fields">
-            <Eye className="size-3.5" />
-          </Link>
-          <button onClick={() => { setEditCatalog(c); setDialog(true); }}
-            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600">
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600" title="Edit catalog item">
             <Pencil className="size-3.5" />
-          </button>
+          </Link>
           <button onClick={() => setDeleteCatalog(c)}
-            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-red-600">
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-red-600" title="Delete">
             <Trash2 className="size-3.5" />
           </button>
         </div>
@@ -61,25 +57,15 @@ export default function AdminCatalogsPage() {
       <Breadcrumb items={[{ label: "Home", href: "/home" }, { label: "Admin" }, { label: "Catalogs" }]} />
       <PageHeader title="Catalog Items" description="Manage service catalog items and their form fields."
         action={
-          <Button onClick={() => { setEditCatalog(null); setDialog(true); }} className="gap-1.5">
-            <Plus className="size-4" /> Add Catalog Item
-          </Button>
+          <Link href="/admin/catalogs/create">
+            <Button className="gap-1.5">
+              <Plus className="size-4" /> Add Catalog Item
+            </Button>
+          </Link>
         }
       />
       <DataTable columns={columns} data={catalogs} isLoading={isLoading}
         rowKey={(c) => c.catalogId} searchKeys={["catalogName"]} searchPlaceholder="Search catalog..." />
-
-      <CatalogFormDialog
-        open={dialog} catalog={editCatalog}
-        categories={categories} workflows={workflows} isLoading={saving}
-        onSubmit={async (data) => {
-          setSaving(true);
-          const ok = editCatalog ? await update(editCatalog.catalogId, data) : await create(data);
-          setSaving(false);
-          return !!ok;
-        }}
-        onClose={() => { setDialog(false); setEditCatalog(null); }}
-      />
 
       <ConfirmDialog open={!!deleteCatalog} title={`Delete "${deleteCatalog?.catalogName}"?`}
         description="This will remove the catalog item and all its form fields."

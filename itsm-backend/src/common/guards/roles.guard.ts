@@ -1,6 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { ROLES_KEY } from "../decorators/roles.decorator";
+import { isStaffRoleName } from "../utils/roles.util";
 
 /**
  * Reads the @Roles(...) metadata on the route handler and compares it against
@@ -32,6 +33,13 @@ export class RolesGuard implements CanActivate {
 
     const userRoles = user.roles.map(normalize);
     
+    // "Fulfiller" / "Agent" mean "any resolver role". That includes admin-defined
+    // roles such as "IT Engineer", recognised by name (see roles.util.ts).
+    const wantsFulfiller = requiredRoles.some((role) => ["Fulfiller", "Agent"].includes(normalize(role)));
+    if (wantsFulfiller && userRoles.some((role: string) => isStaffRoleName(role))) {
+      return true;
+    }
+
     // Expand "Fulfiller" to actual IT roles
     const expandedRequired = requiredRoles.flatMap((role) => {
       const normalized = normalize(role);

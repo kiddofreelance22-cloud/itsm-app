@@ -47,6 +47,7 @@ export async function seedAnalystUser(dataSource: DataSource): Promise<void> {
       email: analystEmail,
       passwordHash,
       fullName: analystFullName,
+      primaryRole: agentRole,
       isActive: true,
     });
 

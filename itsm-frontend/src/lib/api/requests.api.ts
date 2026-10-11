@@ -15,4 +15,9 @@ export const RequestsApi = {
   listMine: () => apiFetch<ServiceRequest[]>("/requests/mine"),
   listAll: () => apiFetch<ServiceRequest[]>("/requests"),
   getOne: (id: number) => apiFetch<ServiceRequest>(`/requests/${id}`),
+  cancel: (id: number, comments?: string) =>
+    apiFetch<ServiceRequest>(`/requests/${id}/cancel`, {
+      method: "POST",
+      body: JSON.stringify({ comments }),
+    }),
 };

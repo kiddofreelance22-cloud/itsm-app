@@ -15,7 +15,7 @@ export interface CreateUserDto {
   alternateEmail?: string;
   employeeId?: string;
   jobTitle?: string;
-  department?: string;
+  departmentId?: number;
   managerName?: string;
   businessService?: string;
   location?: string;

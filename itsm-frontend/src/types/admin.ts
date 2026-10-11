@@ -48,7 +48,8 @@ export interface AdminUser {
   // Organisation
   employeeId?: string;
   jobTitle?: string;
-  department?: string;
+  departmentId?: number;
+  department?: { departmentId: number; departmentName: string; departmentCode: string } | null;
   managerName?: string;
   businessService?: string;
   location?: string;
@@ -90,10 +91,23 @@ export interface AdminUser {
   updatedAt?: string;
 }
 
+export interface CategoryScope {
+  workgroupIds: number[] | null;
+  locationIds: number[] | null;
+  memberIds: number[] | null;
+  inherited: boolean;
+}
 export interface Category {
-  categoryId: number; categoryName: string; description?: string;
-  parent: { categoryId: number; categoryName: string } | null;
-  children: Category[]; isActive: boolean;
+  categoryId: number; nodeUuid?: string; categoryName: string; categoryCode?: string; description?: string;
+  parent: { categoryId: number; categoryName: string } | null; parentCategoryId?: number | null;
+  children: Category[]; displayOrder: number; icon?: string; isActive: boolean;
+  availableInPortal: boolean; availableInMobile: boolean;
+  showInCatalog: boolean; allowInIncident: boolean;
+  materializedPath?: string;
+  defaultAssignmentGroup?: { groupId: number; groupName: string } | null;
+  workgroupIds?: number[] | null; locationIds?: number[] | null; memberIds?: number[] | null;
+  effectiveScope?: CategoryScope;
+  createdAt?: string; updatedAt?: string;
 }
 export interface Status {
   statusId: number; statusName: string; statusCode: string;
@@ -129,6 +143,29 @@ export interface AssignmentGroup {
 export interface Location {
   locationId: number; locationName: string; locationCode: string;
   type: string; description?: string; isActive: boolean;
+}
+export interface ServiceCategory {
+  serviceCategoryId: number; categoryName: string; parentCategoryId?: number | null; parentCategoryName?: string;
+  description?: string; imageUrl?: string; tileColor: string; sortOrder: number; isActive: boolean;
+}
+export interface ServiceImpact {
+  serviceImpactId: number; impactName: string; sortOrder: number; isDefault: boolean; isActive: boolean;
+}
+export interface ServiceCompletion {
+  serviceCompletionId: number; completionName: string; description?: string;
+  sortOrder: number; isDefault: boolean; isActive: boolean;
+}
+export interface ClosureCode { closureCodeId: number; closureCodeName: string; isActive: boolean; }
+export interface PendingReason { pendingReasonId: number; pendingReasonName: string; isActive: boolean; }
+export interface PriorityMatrix {
+  priorityMatrixId: number; urgencyId: number; impactId: number; priorityId: number;
+  urgency: Urgency; impact: Impact; priority: Priority; isActive: boolean;
+}
+export interface ServiceWindowDay { day: number; enabled: boolean; from: string; to: string; }
+export interface SlaServiceWindow {
+  slaServiceWindowId: number; slaName: string; holidayCalendarLocation?: string;
+  useAnalystWorkLocation: boolean; timeZone: string; isDefault: boolean; isActive: boolean;
+  is24x7: boolean; serviceWindow: ServiceWindowDay[];
 }
 export interface ModulePermissions {
   read: boolean; create: boolean; update: boolean; delete: boolean; administer: boolean;

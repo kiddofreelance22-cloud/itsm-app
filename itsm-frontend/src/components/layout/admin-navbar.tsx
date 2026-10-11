@@ -23,10 +23,9 @@ export function AdminNavbar({ onMenuClick }: AdminNavbarProps) {
 
   return (
     <header
-      className="sticky top-0 z-30 flex h-14 items-center justify-between px-4 md:px-6 shadow-sm"
+      className="sticky top-0 z-30 flex h-[46px] items-center justify-between px-4 md:px-6 shadow-sm"
       style={{ background: "var(--color-navy-950)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}
     >
-      {/* Left: hamburger + breadcrumb label */}
       <div className="flex items-center gap-3">
         <button
           onClick={onMenuClick}
@@ -35,12 +34,8 @@ export function AdminNavbar({ onMenuClick }: AdminNavbarProps) {
         >
           <Menu className="size-5" />
         </button>
-
-        {/* Admin badge */}
-        <span
-          className="hidden items-center gap-1.5 rounded-full border border-brand-600/40 bg-brand-600/10 px-3 py-0.5 text-xs font-semibold text-brand-400 sm:flex"
-        >
-          <span className="size-1.5 rounded-full bg-brand-500 animate-pulse" />
+        <span className="hidden items-center gap-1.5 rounded-full border border-brand-600/40 bg-brand-600/10 px-3 py-0.5 text-xs font-semibold text-brand-400 sm:flex">
+          <span className="size-1.5 rounded-full bg-brand-500 animate-pulse text-white" />
           Admin Console
         </span>
       </div>
@@ -57,7 +52,7 @@ export function AdminNavbar({ onMenuClick }: AdminNavbarProps) {
               </Avatar>
               <div className="hidden text-left sm:block">
                 <p className="text-xs font-semibold text-white leading-none">{user?.fullName ?? "Admin"}</p>
-                <p className="text-[10px] text-[rgba(255,255,255,0.45)] leading-none mt-0.5 truncate max-w-[140px]">
+                <p className="text-[10px] text-[rgba(255,255,255,0.45)] leading-none mt-0.5 truncate max-w-35">
                   {user?.email ?? "—"}
                 </p>
               </div>

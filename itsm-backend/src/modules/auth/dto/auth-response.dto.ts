@@ -12,6 +12,7 @@ export class AuthResponseDto {
     fullName: string;
     phone?: string;
     roles: string[];
+    permissions: string[];
     isFirstLogin?: boolean;
   };
 }

@@ -1,0 +1,871 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Category Configuration</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+html, body { margin: 0; padding: 0; }
+body { display: flex; justify-content: center; background: #E4E7EC; padding: 20px 0; box-sizing: border-box; font-family: 'Public Sans', sans-serif; }
+
+  body { margin: 0; font-family: 'Public Sans', sans-serif; background: #F7F8FA; }
+  a { color: #175CD3; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .tree-grp { font-size: 10.5px; font-weight: 800; color: #8A94A6; text-transform: uppercase; letter-spacing: 0.6px; padding: 14px 14px 6px 14px; margin-top: 4px; display: flex; align-items: center; gap: 6px; border-top: 1px solid #EDEFF2; }
+  .tree-grp:first-child { border-top: none; margin-top: 0; padding-top: 10px; }
+  .tree-item { display: flex; align-items: center; gap: 8px; padding: 7px 14px 7px 30px; font-size: 12.5px; color: #344054; border-left: 3px solid transparent; box-sizing: border-box; }
+  .tree-item:hover { background: #F5F8FE; }
+  .tree-item.active { background: #E3EBFB; color: #175CD3; font-weight: 700; border-left-color: #175CD3; }
+  .tree-parent { font-weight: 700; color: #1D2433; }
+  .tree-child { padding-left: 30px; margin-left: 20px; border-left: 1px solid #E4E7EC; }
+  .tree-child.active { border-left: 3px solid #175CD3; margin-left: 18px; }
+  .tree-subgrp { font-size: 11px; font-weight: 700; color: #475467; padding: 12px 14px 4px 44px; }
+  .tree-subitem { padding-left: 44px; }
+
+  .field { border: 1px solid #D0D5DD; border-radius: 5px; background: #FFFFFF; padding: 0 11px; height: 36px; font-size: 13px; font-family: 'Public Sans', sans-serif; color: #1D2433; width: 100%; box-sizing: border-box; appearance: none; }
+  .field:focus { outline: none; border-color: #175CD3; box-shadow: 0 0 0 3px rgba(23,92,211,0.14); }
+  .field:disabled { background: #F7F8FA; color: #98A2B3; cursor: not-allowed; }
+  textarea.field { height: auto; min-height: 64px; padding: 8px 11px; resize: vertical; line-height: 1.5; }
+  select.field { cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
+  .lbl { font-size: 12px; font-weight: 600; color: #344054; display: block; margin-bottom: 5px; }
+  .req { color: #D92D20; }
+  .fld { display: flex; flex-direction: column; }
+  .fld-row { display: flex; gap: 12px; }
+  .fld-row .fld { flex: 1 1 0; min-width: 0; }
+  .char-count { font-size: 10.5px; color: #98A2B3; margin-top: 4px; text-align: right; }
+
+  .eyebrow { display: flex; align-items: center; justify-content: space-between; padding-bottom: 11px; border-bottom: 2px solid #1D2433; margin-bottom: 18px; flex: none; }
+  .eyebrow-title { font-size: 11.5px; font-weight: 800; color: #1D2433; text-transform: uppercase; letter-spacing: 0.6px; display: flex; align-items: center; gap: 8px; }
+
+  .btn-ghost { height: 34px; padding: 0 16px; border: 1px solid #D0D5DD; border-radius: 7px; background: #FFFFFF; font-size: 12.5px; color: #344054; font-weight: 600; cursor: pointer; }
+  .btn-primary { height: 34px; padding: 0 16px; border: none; border-radius: 7px; background: #175CD3; color: #FFFFFF; font-size: 12.5px; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgba(23,92,211,0.35); }
+  .btn-danger { height: 34px; padding: 0 16px; border: 1px solid #FDA29B; border-radius: 7px; background: #FFFFFF; color: #D92D20; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+  .btn-ghost-sm { height: 28px; padding: 0 12px; border: 1px solid #D0D5DD; border-radius: 6px; background: #FFFFFF; font-size: 11.5px; color: #344054; font-weight: 600; cursor: pointer; }
+
+  .toggle-track { width: 36px; height: 20px; border-radius: 20px; background: #D0D5DD; position: relative; flex: none; cursor: pointer; transition: background 0.12s ease; }
+  .toggle-track.on { background: #175CD3; }
+  .toggle-thumb { width: 16px; height: 16px; border-radius: 50%; background: #FFFFFF; position: absolute; top: 2px; left: 2px; transition: left 0.12s ease; box-shadow: 0 1px 2px rgba(16,24,40,0.25); }
+  .toggle-thumb.on { left: 18px; }
+
+  .cat-row { display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-radius: 6px; }
+  .cat-row:hover { background: #F5F8FE; }
+  .cat-row:hover .cat-row-actions { opacity: 1; }
+  .cat-row.selected { background: #E3EBFB; }
+  .cat-toggle-btn { width: 20px; height: 20px; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #667085; flex: none; }
+  .cat-leaf-dot { width: 20px; display: flex; align-items: center; justify-content: center; flex: none; }
+  .cat-leaf-dot span { width: 5px; height: 5px; border-radius: 50%; background: #98A2B3; display: block; }
+  .cat-name { font-size: 13px; color: #1D2433; cursor: pointer; flex-grow: 1; }
+  .cat-name.root { font-weight: 700; }
+  .cat-badge { font-size: 10px; font-weight: 700; color: #98A2B3; background: #F2F4F7; padding: 2px 8px; border-radius: 10px; flex: none; }
+  .cat-level-badge { font-size: 9.5px; font-weight: 700; color: #175CD3; background: #EFF4FC; padding: 1px 7px; border-radius: 10px; flex: none; }
+  .cat-configured-badge { font-size: 9.5px; font-weight: 700; color: #067647; background: #ECFDF3; border: 1px solid #ABEFC6; padding: 1px 7px 1px 5px; border-radius: 10px; flex: none; display: flex; align-items: center; gap: 3px; cursor: default; }
+  .cat-row-actions { display: flex; align-items: center; gap: 2px; opacity: 0; flex: none; }
+  .cat-action-btn { width: 24px; height: 24px; border: none; background: transparent; border-radius: 5px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #98A2B3; }
+  .cat-action-btn:hover { background: #E4E7EC; color: #344054; }
+
+  .app-nav { width: 260px; flex: none; background: #FFFFFF; border-right: 1px solid #D5DAE1; overflow: hidden; box-sizing: border-box; position: relative; transition: width 0.15s ease; display: flex; flex-direction: column; }
+  .app-nav.collapsed { width: 60px; }
+  .nav-toggle { position: absolute; top: 14px; right: -12px; width: 24px; height: 24px; border-radius: 50%; background: #FFFFFF; border: 1px solid #D5DAE1; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 5; box-shadow: 0 1px 2px rgba(16,24,40,0.1); }
+  .nav-rail-item { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px auto; cursor: pointer; color: #667085; }
+  .nav-rail-item.active { background: #E3EBFB; color: #175CD3; }
+  .nav-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .nav-scroll::-webkit-scrollbar { width: 6px; }
+  .nav-scroll::-webkit-scrollbar-track { background: transparent; }
+  .nav-scroll::-webkit-scrollbar-thumb { background: #D0D5DD; border-radius: 6px; }
+  .nav-scroll::-webkit-scrollbar-thumb:hover { background: #98A2B3; }
+
+  .panel-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .panel-scroll::-webkit-scrollbar { width: 6px; }
+  .panel-scroll::-webkit-scrollbar-track { background: transparent; }
+  .panel-scroll::-webkit-scrollbar-thumb { background: #D0D5DD; border-radius: 6px; }
+  .panel-scroll::-webkit-scrollbar-thumb:hover { background: #98A2B3; }
+
+  .form-section-lbl { font-size: 10.5px; font-weight: 800; color: #8A94A6; text-transform: uppercase; letter-spacing: 0.5px; padding-top: 6px; border-top: 1px solid #F2F4F7; }
+  .form-section-lbl.first { padding-top: 0; border-top: none; }
+  .form-helper { font-size: 11px; color: #98A2B3; line-height: 1.5; margin-top: -6px; margin-bottom: 2px; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; background: #EFF4FC; color: #175CD3; font-size: 11.5px; font-weight: 600; padding: 4px 6px 4px 10px; border-radius: 14px; }
+  .chip-x { cursor: pointer; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; color: #175CD3; opacity: 0.6; border-radius: 50%; }
+  .chip-x:hover { opacity: 1; background: rgba(23,92,211,0.14); }
+  .member-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #D0D5DD; background: #FFFFFF; color: #344054; font-size: 11.5px; font-weight: 600; padding: 5px 12px; border-radius: 14px; cursor: pointer; }
+  .member-chip.selected { background: #175CD3; border-color: #175CD3; color: #FFFFFF; }
+  .check-row { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; color: #344054; padding: 3px 0; }
+  .check-row input { width: 14px; height: 14px; margin-top: 2px; accent-color: #175CD3; cursor: pointer; flex: none; }
+  .check-row .check-label { display: flex; flex-direction: column; }
+  .check-row .check-sub { font-size: 10.5px; color: #98A2B3; }
+  .icon-swatch { width: 34px; height: 34px; border-radius: 7px; background: #EFF4FC; color: #175CD3; display: flex; align-items: center; justify-content: center; flex: none; }
+  .config-banner { display: flex; align-items: flex-start; gap: 8px; background: #ECFDF3; border: 1px solid #ABEFC6; border-radius: 7px; padding: 9px 11px; flex: none; }
+  .config-banner svg { flex: none; margin-top: 1px; }
+  .config-banner-text { font-size: 11.5px; color: #067647; line-height: 1.5; }
+  .config-banner-text b { font-weight: 700; }
+  .radio-row { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #344054; font-weight: 600; }
+  .radio-row input { width: 14px; height: 14px; accent-color: #175CD3; cursor: pointer; }
+
+</style>
+</head>
+<body>
+<div id="app-root"></div>
+<template id="app-template">
+<div style="width: 1360px; height: 820px; box-sizing: border-box; background: #F7F8FA; display: flex; flex-direction: column; position: relative;">
+
+  <!-- top header -->
+  <div style="height: 46px; flex: none; background: #14213D; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; box-sizing: border-box;">
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="#B7C0D4" stroke-width="1.8" stroke-linecap="round"></path></svg>
+      <div style="display: flex; align-items: center; gap: 7px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="8" rx="1.5" fill="#5B9BF0"></rect><rect x="13" y="3" width="8" height="8" rx="1.5" fill="#175CD3"></rect><rect x="3" y="13" width="8" height="8" rx="1.5" fill="#175CD3"></rect><rect x="13" y="13" width="8" height="8" rx="1.5" fill="#5B9BF0"></rect></svg>
+        <div style="font-size: 13px; font-weight: 700; color: #FFFFFF;">Meridian</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9z" stroke="#B7C0D4" stroke-width="1.6" stroke-linejoin="round"></path><path d="M13.7 21a2 2 0 01-3.4 0" stroke="#B7C0D4" stroke-width="1.6" stroke-linecap="round"></path></svg>
+      <div style="width: 24px; height: 24px; border-radius: 4px; background: #175CD3; color: #FFFFFF; font-weight: 700; font-size: 10.5px; display: flex; align-items: center; justify-content: center;">AD</div>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; display: flex; min-height: 0;">
+
+    <!-- APP NAVIGATOR -->
+    <div class="{{navClass}}">
+
+      <button class="nav-toggle" onClick="{{toggleNav}}" title="{{navToggleTitle}}">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" style="transform: {{chevronTransform}};"><path d="M15 6l-6 6 6 6" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      </button>
+
+      <sc-if value="{{navExpanded}}" hint-placeholder-val="{{true}}">
+        <div style="padding: 10px 12px; border-bottom: 1px solid #EDEFF2; flex: none;">
+          <input type="text" placeholder="Filter navigator" style="width: 100%; height: 28px; padding: 0 8px; border: 1px solid #D0D5DD; border-radius: 5px; font-size: 12px; color: #344054; box-sizing: border-box;">
+        </div>
+        <div class="nav-scroll">
+          <div style="padding: 4px 0;">
+
+            <div class="tree-grp">User</div>
+            <a href="MyIncidents.html" class="tree-item" style="text-decoration:none;">My Incidents</a>
+            <a href="CreateIncident.html" class="tree-item" style="text-decoration:none;">New Incident</a>
+            <div class="tree-item">Feedback Moderation</div>
+            <div class="tree-item">Approve Incident Records</div>
+
+            <div class="tree-grp">Manage Incidents</div>
+            <a href="Main.html" class="tree-item" style="text-decoration:none;">Incident List</a>
+            <a href="CreateIncident.html" class="tree-item" style="text-decoration:none;">New Incident for User</a>
+            <div class="tree-item">Work Order List</div>
+
+            <div class="tree-grp">Configuration</div>
+
+            <div class="tree-subgrp">Incident Masters</div>
+            <div class="tree-item tree-subitem active">Category</div>
+            <a href="ClassificationConfig.html" class="tree-item tree-subitem" style="text-decoration:none;">Classification</a>
+            <div class="tree-item tree-subitem">Incident Work Order Checklist</div>
+            <div class="tree-item tree-subitem">Checklist</div>
+            <div class="tree-item tree-subitem">Closure Code</div>
+            <div class="tree-item tree-subitem">Log Incident Page</div>
+            <div class="tree-item tree-subitem">End User Incident Details Page</div>
+            <div class="tree-item tree-subitem">Pending Reason</div>
+            <div class="tree-item tree-subitem">Resolution Code</div>
+
+            <div class="tree-subgrp">SLA Configurations</div>
+            <div class="tree-item tree-subitem">Impact</div>
+            <div class="tree-item tree-subitem">SLA Matrix By CI</div>
+            <div class="tree-item tree-subitem">Priority</div>
+            <div class="tree-item tree-subitem">Priority Matrix</div>
+            <div class="tree-item tree-subitem">Workgroup SLA Window</div>
+            <div class="tree-item tree-subitem">SLA Service Window</div>
+            <div class="tree-item tree-subitem">SLA Matrix</div>
+            <div class="tree-item tree-subitem">Urgency</div>
+
+            <div class="tree-subgrp">TFS</div>
+            <div class="tree-item tree-subitem">TFS Configuration</div>
+            <div class="tree-item tree-subitem">Work Item Field Configuration</div>
+            <div class="tree-item tree-subitem">Value to Value Mapping</div>
+            <div class="tree-item tree-subitem">Profile Mapping</div>
+            <div class="tree-item tree-subitem">TFS Profile Mapping</div>
+
+            <div class="tree-subgrp">Others</div>
+            <div class="tree-item tree-subitem">Cost Configuration</div>
+            <div class="tree-item tree-subitem">Feedback Configuration</div>
+            <div class="tree-item tree-subitem">ETR E-mail Notification</div>
+            <a href="StatusConfig.html" class="tree-item tree-subitem" style="text-decoration:none;">Status Configuration</a>
+            <a href="StatusTransitionMatrix.html" class="tree-item tree-subitem" style="text-decoration:none;">Status Transition Matrix</a>
+            <div class="tree-item tree-subitem">E-mail Notification</div>
+            <div class="tree-item tree-subitem">SMS Notification</div>
+            <div class="tree-item tree-subitem">Voice Call Notification</div>
+            <div class="tree-item tree-subitem">Information Ticker</div>
+            <div class="tree-item tree-subitem">Major Incident</div>
+            <div class="tree-item tree-subitem">Rule</div>
+            <div class="tree-item tree-subitem">User Type</div>
+            <div class="tree-item tree-subitem">Auto Work Order Configuration</div>
+            <div class="tree-item tree-subitem">Standard Operating Procedure (SOP)</div>
+            <div class="tree-item tree-subitem">Evaluator Configuration</div>
+            <div class="tree-item tree-subitem">Approver Group Configuration</div>
+            <div class="tree-item tree-subitem">Approval Configuration</div>
+
+            <div class="tree-subgrp">User Management</div>
+            <a href="UsersList.html" class="tree-item tree-subitem" style="text-decoration:none;">Users</a>
+            <a href="CreateUser.html" class="tree-item tree-subitem" style="text-decoration:none;">Create New User</a>
+
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{navCollapsed}}" hint-placeholder-val="{{false}}">
+        <div class="nav-scroll" style="padding-top: 56px; display: flex; flex-direction: column; align-items: center;">
+          <div class="nav-rail-item" title="User">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="currentColor" stroke-width="1.6"></circle><path d="M5 20c1.2-4 4-6 7-6s5.8 2 7 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+          </div>
+          <div class="nav-rail-item" title="Manage Incidents">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 4h6a1 1 0 011 1v1H8V5a1 1 0 011-1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><rect x="5" y="6" width="14" height="15" rx="2" stroke="currentColor" stroke-width="1.6"></rect><path d="M8.5 12h7M8.5 16h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+          </div>
+          <div class="nav-rail-item active" title="Configuration">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="1.5"></path><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" stroke-width="1.3"></path></svg>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+
+    <!-- MAIN -->
+    <div style="flex-grow: 1; overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column; min-width: 0;">
+
+      <!-- page header -->
+      <div style="padding: 16px 28px; border-bottom: 1px solid #E4E7EC; background: #FFFFFF; flex: none;">
+        <div style="font-size: 11.5px; color: #98A2B3; margin-bottom: 6px;"><span>Configuration</span> <span style="color:#D0D5DD;">&gt;</span> <span>Incident Masters</span> <span style="color:#D0D5DD;">&gt;</span> <span style="color:#344054; font-weight: 500;">Category</span></div>
+        <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+          <div>
+            <div style="font-weight: 800; font-size: 20px; color: #0F1626; letter-spacing: -0.2px;">Category Configuration</div>
+            <div style="font-size: 12.5px; color: #667085; margin-top: 3px;">Manage incident categories as a hierarchy, up to 5 levels deep.</div>
+          </div>
+          <a href="Main.html" class="btn-ghost" style="text-decoration:none; display:flex; align-items:center;">Close</a>
+        </div>
+      </div>
+
+      <div style="flex-grow: 1; overflow: hidden; padding: 22px 28px 24px 28px; box-sizing: border-box; display: flex; gap: 32px;">
+
+        <!-- LEFT: TREE -->
+        <div style="flex: 1 1 60%; min-width: 0; display: flex; flex-direction: column; min-height: 0;">
+          <div class="eyebrow" style="margin-bottom: 12px;">
+            <div class="eyebrow-title">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 4h9l7 7v9H4V4z" stroke="#1D2433" stroke-width="1.8" stroke-linejoin="round"></path><path d="M8 12h6M8 16h4" stroke="#1D2433" stroke-width="1.6" stroke-linecap="round"></path></svg>
+              Category Tree
+            </div>
+            <button type="button" class="btn-primary" onClick="{{openAddRoot}}" style="height: 30px; padding: 0 14px; display: flex; align-items: center; gap: 6px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"></path></svg>
+              Add New Category
+            </button>
+          </div>
+
+          <div class="panel-scroll" style="border: 1px solid #E4E7EC; border-radius: 8px; background: #FFFFFF; padding: 8px;">
+            <sc-for list="{{rows}}" as="row" hint-placeholder-count="27">
+              <div class="{{row.rowClass}}" style="padding-left: {{row.indent}}px;">
+
+                <sc-if value="{{row.hasChildren}}" hint-placeholder-val="{{true}}">
+                  <button type="button" class="cat-toggle-btn" onClick="{{row.onToggle}}">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" style="transform: {{row.chevronTransform}};"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  </button>
+                </sc-if>
+                <sc-if value="{{row.isLeaf}}" hint-placeholder-val="{{false}}">
+                  <div class="cat-leaf-dot"><span></span></div>
+                </sc-if>
+
+                <span class="{{row.nameClass}}" onClick="{{row.onEdit}}">{{row.name}}</span>
+
+                <span class="cat-level-badge">L{{row.level}}</span>
+
+                <sc-if value="{{row.configured}}" hint-placeholder-val="{{false}}">
+                  <span class="cat-configured-badge" title="{{row.configuredTitle}}">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#067647" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                    Configured
+                  </span>
+                </sc-if>
+
+                <sc-if value="{{row.inactive}}" hint-placeholder-val="{{false}}">
+                  <span class="cat-badge">Inactive</span>
+                </sc-if>
+
+                <div class="cat-row-actions">
+                  <sc-if value="{{row.canAddChild}}" hint-placeholder-val="{{true}}">
+                    <button type="button" class="cat-action-btn" title="Add sub-category" onClick="{{row.onAddChild}}">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+                    </button>
+                  </sc-if>
+                </div>
+
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- RIGHT: FORM -->
+        <div style="flex: 1 1 40%; min-width: 0; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid #E4E7EC; padding-left: 32px;">
+
+          <sc-if value="{{formOpen}}" hint-placeholder-val="{{false}}">
+            <div class="eyebrow">
+              <div class="eyebrow-title">{{formTitle}}</div>
+              <span class="cat-level-badge">{{formLevelNote}}</span>
+            </div>
+
+            <div class="panel-scroll" style="display: flex; flex-direction: column; gap: 14px; padding-right: 6px;">
+
+              <sc-if value="{{formHasConfig}}" hint-placeholder-val="{{false}}">
+                <div class="config-banner">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#067647" stroke-width="1.6"></circle><path d="M8 12.5l2.5 2.5L16 9" stroke="#067647" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  <div class="config-banner-text"><b>Routing &amp; assignment configuration is set</b> for this category — {{formConfigSummary}}</div>
+                </div>
+              </sc-if>
+
+              <div class="form-section-lbl first">Category Information</div>
+              <div class="fld">
+                <label class="lbl">Category Name <span class="req">*</span></label>
+                <input class="field" type="text" value="{{formName}}" onChange="{{setFormName}}" placeholder="e.g. Peripherals">
+              </div>
+              <div class="fld">
+                <label class="lbl">Description <span class="req">*</span></label>
+                <textarea class="field" onChange="{{setFormDescription}}" placeholder="Briefly describe what falls under this category">{{formDescription}}</textarea>
+                <div class="char-count">{{formDescriptionCount}}/500 characters</div>
+              </div>
+
+              <div class="form-section-lbl">Configuration</div>
+              <div class="fld-row">
+                <div class="fld">
+                  <label class="lbl">Parent Category</label>
+                  <input class="field" type="text" value="{{formParentLabel}}" disabled>
+                </div>
+                <div class="fld">
+                  <label class="lbl">Display Order</label>
+                  <input class="field" type="number" min="1" value="{{formDisplayOrder}}" onChange="{{setFormDisplayOrder}}">
+                </div>
+              </div>
+
+              <div class="form-section-lbl">Incident Routing</div>
+              <div class="form-helper">Incidents filed under this category (or a descendant that doesn't set its own) route here automatically. Leave as "Inherit" to fall back to the parent category's routing, or the system default if none is set anywhere up the tree.</div>
+              <div class="fld">
+                <label class="lbl">Default Assignment Group</label>
+                <select class="field" value="{{formDefaultGroup}}" onChange="{{setFormDefaultGroup}}">
+                  <option value="">Inherit from parent / system default</option>
+                  <sc-for list="{{workgroupAllOptions}}" as="wg" hint-placeholder-count="6">
+                    <option value="{{wg}}">{{wg}}</option>
+                  </sc-for>
+                </select>
+              </div>
+
+              <div class="form-section-lbl">Assignments (optional)</div>
+              <div class="form-helper">Each category supports exactly one workgroup, one location and one preferred member. Leave blank to inherit the parent category's assignments.</div>
+
+              <div class="fld">
+                <label class="lbl">Workgroup</label>
+                <select class="field" value="{{formWorkgroup}}" onChange="{{setFormWorkgroup}}">
+                  <option value="">— None —</option>
+                  <sc-for list="{{workgroupAllOptions}}" as="wg" hint-placeholder-count="6">
+                    <option value="{{wg}}">{{wg}}</option>
+                  </sc-for>
+                </select>
+                <div class="form-helper" style="margin-top:6px; margin-bottom:0;">Incidents in this category are picked up by this workgroup only.</div>
+              </div>
+
+              <div class="fld">
+                <label class="lbl">Location</label>
+                <select class="field" value="{{formLocation}}" onChange="{{setFormLocation}}">
+                  <option value="">— None —</option>
+                  <sc-for list="{{locationAllOptions}}" as="loc" hint-placeholder-count="5">
+                    <option value="{{loc}}">{{loc}}</option>
+                  </sc-for>
+                </select>
+                <div class="form-helper" style="margin-top:6px; margin-bottom:0;">On assignment, the requester's location is matched against a resolver in this same location within the workgroup.</div>
+              </div>
+
+              <div class="fld">
+                <label class="lbl">Workgroup Members</label>
+                <sc-if value="{{membersUnavailable}}" hint-placeholder-val="{{true}}">
+                  <select class="field" disabled>
+                    <option>{{membersEmptyText}}</option>
+                  </select>
+                </sc-if>
+                <sc-if value="{{membersAvailable}}" hint-placeholder-val="{{false}}">
+                  <select class="field" value="{{formMember}}" onChange="{{setFormMember}}">
+                    <option value="">— Auto-assign within workgroup —</option>
+                    <sc-for list="{{memberOptions}}" as="m" hint-placeholder-count="3">
+                      <option value="{{m}}">{{m}}</option>
+                    </sc-for>
+                  </select>
+                  <div class="form-helper" style="margin-top:6px; margin-bottom:0;">Pin a specific member as the preferred assignee for this category; leave as auto-assign to route within the workgroup.</div>
+                </sc-if>
+              </div>
+
+              <div class="form-section-lbl">Icon</div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <div class="icon-swatch">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="1.6"></path><path d="M19.4 15a1.65 1.65 0 00.33 1.82 2 2 0 11-2.83 2.83 1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51 2 2 0 11-4 0 1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33 2 2 0 11-2.83-2.83 1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1 2 2 0 110-4 1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82 2 2 0 112.83-2.83 1.65 1.65 0 001.82.33 1.65 1.65 0 001-1.51 2 2 0 114 0 1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33 2 2 0 112.83 2.83 1.65 1.65 0 00-.33 1.82 1.65 1.65 0 001.51 1 2 2 0 110 4 1.65 1.65 0 00-1.51 1z" stroke="currentColor" stroke-width="1.1"></path></svg>
+                </div>
+                <button type="button" class="btn-ghost-sm" onClick="{{cycleIcon}}">Change Icon</button>
+                <button type="button" class="btn-ghost-sm" onClick="{{removeIcon}}">Remove</button>
+              </div>
+
+              <div class="form-section-lbl">Status</div>
+              <label class="check-row">
+                <input type="checkbox" checked="{{formIsActive}}" onChange="{{toggleFormActive}}">
+                <span class="check-label">Active</span>
+              </label>
+
+              <div class="form-section-lbl">Visibility</div>
+              <sc-for list="{{visibilityItems}}" as="v" hint-placeholder-count="4">
+                <label class="check-row">
+                  <input type="checkbox" checked="{{v.checked}}" onChange="{{v.onToggle}}">
+                  <span class="check-label">{{v.label}}</span>
+                </label>
+              </sc-for>
+
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 16px; border-top: 1px solid #F2F4F7; flex: none;">
+              <button type="button" class="btn-primary" onClick="{{saveForm}}">Save Category</button>
+              <button type="button" class="btn-ghost" onClick="{{cancelForm}}">Cancel</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{formEmpty}}" hint-placeholder-val="{{true}}">
+            <div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #98A2B3; gap: 10px; padding: 20px;">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M4 4h9l7 7v9H4V4z" stroke="#D0D5DD" stroke-width="1.6" stroke-linejoin="round"></path><path d="M8 12h6M8 16h4" stroke="#D0D5DD" stroke-width="1.5" stroke-linecap="round"></path></svg>
+              <div style="font-size: 13px; color: #667085; font-weight: 600;">No category selected</div>
+              <div style="font-size: 12px; color: #98A2B3; max-width: 220px; line-height: 1.5;">Click a category in the tree to edit it, or use "Add New Category" / the + icon to create a new one.</div>
+            </div>
+          </sc-if>
+
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+</template>
+<script src="dc-mini-runtime.js"></script>
+<script>
+
+const MAX_DEPTH = 5;
+
+const WORKGROUPS = ['Hardware Support', 'Network Support', 'Software Support', 'Service Desk L1', 'Database Team', 'Security Team'];
+const LOCATIONS = ['Mumbai', 'Delhi', 'Bangalore', 'Pune', 'Remote'];
+const WORKGROUP_MEMBERS = {
+  'Hardware Support': ['Rahul Mehta', 'Ananya Iyer', 'Karan Shah'],
+  'Network Support': ['Priya Nair', 'Vikram Rao'],
+  'Software Support': ['Sana Sheikh', 'Devika Menon'],
+  'Service Desk L1': ['Arjun Kapoor', 'Neha Joshi', 'Farhan Ali'],
+  'Database Team': ['Ritu Malhotra', 'Suresh Pillai'],
+  'Security Team': ['Aditya Verma', 'Meera Pillai']
+};
+const ICONS = ['gear', 'folder', 'laptop', 'network', 'mail', 'shield', 'database'];
+
+function emptyVisibility() {
+  return { servicePortal: true, mobileApp: true, requestCatalog: true, incidentSelection: true };
+}
+
+function mkNode(id, name, children, overrides) {
+  const base = {
+    id: id,
+    name: name,
+    active: true,
+    description: '',
+    displayOrder: 1,
+    defaultAssignmentGroup: '',
+    workgroup: '',
+    location: '',
+    member: '',
+    icon: 'folder',
+    visibility: emptyVisibility(),
+    children: children || []
+  };
+  return Object.assign(base, overrides || {});
+}
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      navCollapsed: false,
+      nextId: 100,
+      tree: [
+        mkNode('hardware', 'Hardware', [
+          mkNode('laptop', 'Laptop', [
+            mkNode('battery', 'Battery', [
+              mkNode('charging-issue', 'Charging Issue', [
+                mkNode('port-damage', 'Port Damage', [])
+              ]),
+              mkNode('swelling', 'Swelling', [])
+            ]),
+            mkNode('screen', 'Screen', []),
+            mkNode('keyboard', 'Keyboard', [])
+          ]),
+          mkNode('desktop', 'Desktop', []),
+          mkNode('printer', 'Printer', []),
+          mkNode('monitor', 'Monitor', [])
+        ], { description: 'Hardware related incidents', displayOrder: 1, defaultAssignmentGroup: 'Hardware Support', workgroup: 'Hardware Support', location: 'Mumbai', icon: 'gear' }),
+        mkNode('software', 'Software', [
+          mkNode('os', 'Operating System', []),
+          mkNode('application', 'Application', []),
+          mkNode('license', 'License', [], { active: false })
+        ], { description: 'Software related incidents', displayOrder: 2, defaultAssignmentGroup: 'Software Support', workgroup: 'Software Support', location: 'Bangalore', icon: 'laptop' }),
+        mkNode('network', 'Network', [
+          mkNode('vpn', 'VPN', []),
+          mkNode('wifi', 'Wi-Fi', []),
+          mkNode('lan', 'LAN', [])
+        ], { description: 'Network related incidents', displayOrder: 3, defaultAssignmentGroup: 'Network Support', workgroup: 'Network Support', location: 'Delhi', icon: 'network' }),
+        mkNode('email', 'Email', [
+          mkNode('outlook', 'Outlook', []),
+          mkNode('webmail', 'Webmail', [])
+        ], { description: 'Email related incidents', displayOrder: 4, defaultAssignmentGroup: 'Service Desk L1', workgroup: 'Service Desk L1', location: 'Mumbai', icon: 'mail' }),
+        mkNode('access', 'Access & Security', [
+          mkNode('password-reset', 'Password Reset', []),
+          mkNode('account-lockout', 'Account Lockout', [])
+        ], { description: 'Access and security related incidents', displayOrder: 5, defaultAssignmentGroup: 'Security Team', workgroup: 'Security Team', location: 'Pune', icon: 'shield' }),
+        mkNode('database', 'Database', [
+          mkNode('query-issue', 'Query Issue', []),
+          mkNode('backup-failure', 'Backup Failure', [])
+        ], { description: 'Database related incidents', displayOrder: 6, defaultAssignmentGroup: 'Database Team', workgroup: 'Database Team', location: 'Bangalore', icon: 'database' })
+      ],
+      expanded: { hardware: true, laptop: true, battery: true, 'charging-issue': true },
+      formMode: null,
+      formParentId: null,
+      formEditId: null,
+      formName: '',
+      formDescription: '',
+      formDisplayOrder: 1,
+      formDefaultGroup: '',
+      formWorkgroup: '',
+      formLocation: '',
+      formMember: '',
+      formIcon: 'folder',
+      formVisibility: emptyVisibility(),
+      formActive: true
+    };
+  }
+
+  toggleNav() {
+    this.setState({ navCollapsed: !this.state.navCollapsed });
+  }
+
+  toggleExpand(id) {
+    const expanded = Object.assign({}, this.state.expanded);
+    expanded[id] = !expanded[id];
+    this.setState({ expanded });
+  }
+
+  // --- recursive tree helpers (pure functions over a nodes array) ---
+
+  findPath(nodes, targetId, path) {
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      const nextPath = path.concat([n]);
+      if (n.id === targetId) return nextPath;
+      if (n.children && n.children.length) {
+        const found = this.findPath(n.children, targetId, nextPath);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  updateNode(nodes, id, patch) {
+    return nodes.map((n) => {
+      if (n.id === id) return Object.assign({}, n, patch);
+      if (n.children && n.children.length) return Object.assign({}, n, { children: this.updateNode(n.children, id, patch) });
+      return n;
+    });
+  }
+
+  addChildNode(nodes, parentId, newNode) {
+    return nodes.map((n) => {
+      if (n.id === parentId) return Object.assign({}, n, { children: (n.children || []).concat([newNode]) });
+      if (n.children && n.children.length) return Object.assign({}, n, { children: this.addChildNode(n.children, parentId, newNode) });
+      return n;
+    });
+  }
+
+  describeConfig(defaultAssignmentGroup, workgroup, location, member) {
+    const parts = [];
+    if (defaultAssignmentGroup) parts.push('Default group: ' + defaultAssignmentGroup);
+    if (workgroup) parts.push('Workgroup: ' + workgroup);
+    if (location) parts.push('Location: ' + location);
+    if (member) parts.push('Preferred assignee: ' + member);
+    return parts.join(' · ');
+  }
+
+  flatten(nodes, expanded, level, out) {
+    nodes.forEach((n) => {
+      const isExpanded = !!expanded[n.id];
+      const hasChildren = !!(n.children && n.children.length);
+      out.push({
+        id: n.id,
+        name: n.name,
+        active: n.active,
+        level,
+        hasChildren,
+        isExpanded,
+        defaultAssignmentGroup: n.defaultAssignmentGroup,
+        workgroup: n.workgroup,
+        location: n.location,
+        member: n.member
+      });
+      if (isExpanded && hasChildren) {
+        this.flatten(n.children, expanded, level + 1, out);
+      }
+    });
+  }
+
+  // --- form field reset helpers ---
+
+  resetFormFields(extra) {
+    return Object.assign({
+      formName: '',
+      formDescription: '',
+      formDisplayOrder: 1,
+      formDefaultGroup: '',
+      formWorkgroup: '',
+      formLocation: '',
+      formMember: '',
+      formIcon: 'folder',
+      formVisibility: emptyVisibility(),
+      formActive: true
+    }, extra || {});
+  }
+
+  // --- actions ---
+
+  openAddRoot() {
+    this.setState(this.resetFormFields({ formMode: 'add-root', formParentId: null, formEditId: null }));
+  }
+
+  openAddChild(parentId) {
+    const expanded = Object.assign({}, this.state.expanded);
+    expanded[parentId] = true;
+    this.setState(this.resetFormFields({ formMode: 'add-child', formParentId: parentId, formEditId: null, expanded: expanded }));
+  }
+
+  openEdit(id) {
+    const path = this.findPath(this.state.tree, id, []);
+    const node = path ? path[path.length - 1] : null;
+    if (!node) return;
+    this.setState({
+      formMode: 'edit',
+      formParentId: null,
+      formEditId: id,
+      formName: node.name,
+      formDescription: node.description || '',
+      formDisplayOrder: node.displayOrder || 1,
+      formDefaultGroup: node.defaultAssignmentGroup || '',
+      formWorkgroup: node.workgroup || '',
+      formLocation: node.location || '',
+      formMember: node.member || '',
+      formIcon: node.icon || 'folder',
+      formVisibility: Object.assign(emptyVisibility(), node.visibility || {}),
+      formActive: node.active !== false
+    });
+  }
+
+  setFormName(e) {
+    this.setState({ formName: e.target.value });
+  }
+
+  setFormDescription(e) {
+    this.setState({ formDescription: e.target.value.slice(0, 500) });
+  }
+
+  setFormDisplayOrder(e) {
+    const n = parseInt(e.target.value, 10);
+    this.setState({ formDisplayOrder: isNaN(n) ? 1 : n });
+  }
+
+  setFormDefaultGroup(e) {
+    this.setState({ formDefaultGroup: e.target.value });
+  }
+
+  setFormWorkgroup(e) {
+    const val = e.target.value;
+    const stillAvailable = (WORKGROUP_MEMBERS[val] || []).indexOf(this.state.formMember) !== -1;
+    this.setState({
+      formWorkgroup: val,
+      formMember: stillAvailable ? this.state.formMember : ''
+    });
+  }
+
+  setFormLocation(e) {
+    this.setState({ formLocation: e.target.value });
+  }
+
+  setFormMember(e) {
+    this.setState({ formMember: e.target.value });
+  }
+
+  cycleIcon() {
+    const idx = ICONS.indexOf(this.state.formIcon);
+    const next = ICONS[(idx + 1) % ICONS.length];
+    this.setState({ formIcon: next });
+  }
+
+  removeIcon() {
+    this.setState({ formIcon: 'folder' });
+  }
+
+  toggleFormActive(e) {
+    this.setState({ formActive: e.target.checked });
+  }
+
+  toggleVisibility(key) {
+    const v = Object.assign({}, this.state.formVisibility);
+    v[key] = !v[key];
+    this.setState({ formVisibility: v });
+  }
+
+  cancelForm() {
+    this.setState(this.resetFormFields({ formMode: null, formParentId: null, formEditId: null }));
+  }
+
+  buildNodeFields() {
+    return {
+      name: this.state.formName.trim(),
+      description: this.state.formDescription.trim(),
+      displayOrder: this.state.formDisplayOrder,
+      defaultAssignmentGroup: this.state.formDefaultGroup,
+      workgroup: this.state.formWorkgroup,
+      location: this.state.formLocation,
+      member: this.state.formMember,
+      icon: this.state.formIcon,
+      visibility: Object.assign({}, this.state.formVisibility),
+      active: this.state.formActive
+    };
+  }
+
+  saveForm() {
+    const name = this.state.formName.trim();
+    const description = this.state.formDescription.trim();
+    if (!name || !description) return;
+    const mode = this.state.formMode;
+    const fields = this.buildNodeFields();
+
+    if (mode === 'add-root') {
+      const id = 'cat-' + this.state.nextId;
+      const tree = this.state.tree.concat([Object.assign({ id: id, children: [] }, fields)]);
+      this.setState(this.resetFormFields({ tree: tree, nextId: this.state.nextId + 1, formMode: null, formParentId: null, formEditId: null }));
+    } else if (mode === 'add-child') {
+      const id = 'cat-' + this.state.nextId;
+      const tree = this.addChildNode(this.state.tree, this.state.formParentId, Object.assign({ id: id, children: [] }, fields));
+      const expanded = Object.assign({}, this.state.expanded);
+      expanded[this.state.formParentId] = true;
+      this.setState(this.resetFormFields({ tree: tree, expanded: expanded, nextId: this.state.nextId + 1, formMode: null, formParentId: null, formEditId: null }));
+    } else if (mode === 'edit') {
+      const tree = this.updateNode(this.state.tree, this.state.formEditId, fields);
+      this.setState(this.resetFormFields({ tree: tree, formMode: null, formParentId: null, formEditId: null }));
+    }
+  }
+
+  renderVals() {
+    const flat = [];
+    this.flatten(this.state.tree, this.state.expanded, 1, flat);
+
+    const rows = flat.map((r) => {
+      const isSelected = this.state.formMode === 'edit' && this.state.formEditId === r.id;
+      const isConfigured = !!(r.defaultAssignmentGroup || r.workgroup || r.location || r.member);
+      return {
+        key: r.id,
+        indent: 4 + (r.level - 1) * 24,
+        level: r.level,
+        name: r.name,
+        nameClass: r.level === 1 ? 'cat-name root' : 'cat-name',
+        rowClass: isSelected ? 'cat-row selected' : 'cat-row',
+        inactive: r.active === false,
+        hasChildren: r.hasChildren,
+        isLeaf: !r.hasChildren,
+        chevronTransform: r.isExpanded ? 'rotate(90deg)' : 'none',
+        canAddChild: r.level < MAX_DEPTH,
+        configured: isConfigured,
+        configuredTitle: isConfigured ? this.describeConfig(r.defaultAssignmentGroup, r.workgroup, r.location, r.member) : '',
+        onToggle: () => this.toggleExpand(r.id),
+        onEdit: () => this.openEdit(r.id),
+        onAddChild: () => this.openAddChild(r.id)
+      };
+    });
+
+    let formTitle = '';
+    let formParentLabel = '— (Root Category)';
+    let formLevelNote = '';
+
+    if (this.state.formMode === 'add-root') {
+      formTitle = 'Add New Category';
+      formLevelNote = 'Level 1 of ' + MAX_DEPTH;
+    } else if (this.state.formMode === 'add-child') {
+      const parentPath = this.findPath(this.state.tree, this.state.formParentId, []) || [];
+      const newLevel = parentPath.length + 1;
+      formTitle = 'Add Sub-Category';
+      formParentLabel = parentPath.length ? parentPath.map((n) => n.name).join(' › ') : formParentLabel;
+      formLevelNote = 'Level ' + newLevel + ' of ' + MAX_DEPTH;
+    } else if (this.state.formMode === 'edit') {
+      const path = this.findPath(this.state.tree, this.state.formEditId, []) || [];
+      const level = path.length || 1;
+      const ancestors = path.slice(0, -1);
+      formTitle = level === 1 ? 'Edit Root Category' : 'Edit Sub-Category';
+      formParentLabel = ancestors.length ? ancestors.map((n) => n.name).join(' › ') : formParentLabel;
+      formLevelNote = 'Level ' + level + ' of ' + MAX_DEPTH;
+    }
+
+    const availableMembers = WORKGROUP_MEMBERS[this.state.formWorkgroup] || [];
+    const formHasConfig = !!(this.state.formDefaultGroup || this.state.formWorkgroup || this.state.formLocation || this.state.formMember);
+    const formConfigSummary = this.describeConfig(this.state.formDefaultGroup, this.state.formWorkgroup, this.state.formLocation, this.state.formMember);
+
+    const visibilityItems = [
+      { key: 'servicePortal', label: 'Available in Service Portal', checked: this.state.formVisibility.servicePortal, onToggle: () => this.toggleVisibility('servicePortal') },
+      { key: 'mobileApp', label: 'Available in Mobile App', checked: this.state.formVisibility.mobileApp, onToggle: () => this.toggleVisibility('mobileApp') },
+      { key: 'requestCatalog', label: 'Show in Service Request Catalog', checked: this.state.formVisibility.requestCatalog, onToggle: () => this.toggleVisibility('requestCatalog') },
+      { key: 'incidentSelection', label: 'Allow selection in Incident', checked: this.state.formVisibility.incidentSelection, onToggle: () => this.toggleVisibility('incidentSelection') }
+    ];
+
+    return {
+      navClass: this.state.navCollapsed ? 'app-nav collapsed' : 'app-nav',
+      navExpanded: !this.state.navCollapsed,
+      navCollapsed: this.state.navCollapsed,
+      navToggleTitle: this.state.navCollapsed ? 'Expand navigator' : 'Collapse navigator',
+      chevronTransform: this.state.navCollapsed ? 'rotate(180deg)' : 'none',
+      toggleNav: () => this.toggleNav(),
+      rows,
+      openAddRoot: () => this.openAddRoot(),
+      formOpen: !!this.state.formMode,
+      formEmpty: !this.state.formMode,
+      formTitle,
+      formLevelNote,
+      formName: this.state.formName,
+      formParentLabel,
+      setFormName: (e) => this.setFormName(e),
+      formDescription: this.state.formDescription,
+      formDescriptionCount: this.state.formDescription.length,
+      setFormDescription: (e) => this.setFormDescription(e),
+      formDisplayOrder: this.state.formDisplayOrder,
+      setFormDisplayOrder: (e) => this.setFormDisplayOrder(e),
+      formDefaultGroup: this.state.formDefaultGroup,
+      setFormDefaultGroup: (e) => this.setFormDefaultGroup(e),
+      workgroupAllOptions: WORKGROUPS,
+      formWorkgroup: this.state.formWorkgroup,
+      setFormWorkgroup: (e) => this.setFormWorkgroup(e),
+      locationAllOptions: LOCATIONS,
+      formLocation: this.state.formLocation,
+      setFormLocation: (e) => this.setFormLocation(e),
+      memberOptions: availableMembers,
+      formMember: this.state.formMember,
+      setFormMember: (e) => this.setFormMember(e),
+      membersAvailable: availableMembers.length > 0,
+      membersUnavailable: availableMembers.length === 0,
+      membersEmptyText: !this.state.formWorkgroup ? 'Select a workgroup to see its members.' : 'This workgroup has no members yet.',
+      cycleIcon: () => this.cycleIcon(),
+      removeIcon: () => this.removeIcon(),
+      formIsActive: this.state.formActive,
+      toggleFormActive: (e) => this.toggleFormActive(e),
+      visibilityItems,
+      formHasConfig,
+      formConfigSummary,
+      saveForm: () => this.saveForm(),
+      cancelForm: () => this.cancelForm()
+    };
+  }
+}
+
+
+dcBoot(Component, 'app-root', 'app-template');
+</script>
+</body>
+</html>

@@ -16,6 +16,7 @@ import { ParseIntPipe } from "../../../common/pipes/parse-int.pipe";
 import { CatalogVariablesService } from "./catalog-variables.service";
 import { CreateCatalogVariableDto } from "../dto/create-catalog-variable.dto";
 import { UpdateCatalogVariableDto } from "../dto/update-catalog-variable.dto";
+import { ReorderVariablesDto } from "../dto/reorder-variables.dto";
 
 @ApiTags("catalog-variables")
 @ApiBearerAuth()
@@ -38,6 +39,16 @@ export class CatalogVariablesController {
   @UseGuards(JwtAuthGuard)
   findAll(@Param("catalogId", ParseIntPipe) catalogId: number) {
     return this.variablesService.findAllForCatalog(catalogId);
+  }
+
+  @Patch("reorder")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("Admin")
+  reorder(
+    @Param("catalogId", ParseIntPipe) catalogId: number,
+    @Body() dto: ReorderVariablesDto
+  ) {
+    return this.variablesService.reorder(catalogId, dto);
   }
 
   @Get(":variableId")

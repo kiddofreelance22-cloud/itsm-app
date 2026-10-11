@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, type ChangeEvent, type DragEvent, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   User,
   Phone,
@@ -16,6 +16,7 @@ import {
   Send,
   X,
   RotateCcw,
+  ChevronRight,
   File as FileIcon,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
@@ -25,9 +26,9 @@ import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { useIncidents } from "@/lib/hooks/use-incidents";
-import { CategoriesApi } from "@/lib/api/categories.api";
-import { SubCategoryApi, PriorityApi, ImpactApi, UrgencyApi, AssignmentGroupApi, LocationApi } from "@/lib/api/admin-modules.api";
-import type { Category, SubCategory, Priority, Impact, Urgency, AssignmentGroup, Location } from "@/types/admin";
+import { PriorityApi, ImpactApi, UrgencyApi, AssignmentGroupApi, LocationApi } from "@/lib/api/admin-modules.api";
+import type { Category, Priority, Impact, Urgency, AssignmentGroup, Location } from "@/types/admin";
+import { CategoryPickerModal } from "./category-picker-modal";
 
 interface FormState {
   caller: string;
@@ -35,7 +36,6 @@ interface FormState {
   emailId: string;
   categoryId: number | null;
   summary: string;
-  subCategoryId: number | null;
   description: string;
   priorityId: number | null;
   affectedAsset: string;
@@ -50,12 +50,13 @@ const ACCEPTED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".pdf", ".docx"];
 
 export function IncidentForm() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, isAdmin } = useAuth();
   const { create } = useIncidents();
 
   // API Data
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [subCategories, setSubCategories] = useState<SubCategory[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   const [priorities, setPriorities] = useState<Priority[]>([]);
   const [impacts, setImpacts] = useState<Impact[]>([]);
   const [urgencies, setUrgencies] = useState<Urgency[]>([]);
@@ -70,7 +71,6 @@ export function IncidentForm() {
     emailId: user?.email ?? "",
     categoryId: null,
     summary: "",
-    subCategoryId: null,
     description: "",
     priorityId: null,
     affectedAsset: "",
@@ -92,9 +92,7 @@ export function IncidentForm() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [cats, subs, pris, imps, urgs, groups, locs] = await Promise.all([
-          CategoriesApi.list(),
-          SubCategoryApi.list(),
+        const [pris, imps, urgs, groups, locs] = await Promise.all([
           PriorityApi.list(),
           ImpactApi.list(),
           UrgencyApi.list(),
@@ -102,18 +100,12 @@ export function IncidentForm() {
           LocationApi.list(),
         ]);
         
-        setCategories(cats);
-        setSubCategories(subs);
         setPriorities(pris);
         setImpacts(imps);
         setUrgencies(urgs);
         setAssignmentGroups(groups);
         setLocations(locs);
-        
-        // Set default values from first items if available
-        if (cats.length > 0) {
-          setForm((prev) => ({ ...prev, categoryId: cats[0].categoryId }));
-        }
+
         if (pris.length > 0) {
           const mediumPriority = pris.find((p) => p.priorityName.toLowerCase() === "medium");
           setForm((prev) => ({ ...prev, priorityId: mediumPriority?.priorityId ?? pris[0].priorityId }));
@@ -139,17 +131,14 @@ export function IncidentForm() {
     fetchData();
   }, []);
 
-  // Filter sub-categories based on selected category
-  const filteredSubCategories = subCategories.filter((sc) => sc.category?.categoryId === form.categoryId);
-
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((prev) => {
-      if (key === "categoryId" && value !== null) {
-        // Reset subCategory when category changes
-        return { ...prev, [key]: value, subCategoryId: null };
-      }
-      return { ...prev, [key]: value };
-    });
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function handleCategorySelect(category: Category) {
+    setSelectedCategory(category);
+    update("categoryId", category.categoryId);
+    setErrors((prev) => ({ ...prev, categoryId: undefined }));
   }
 
   function validate(): boolean {
@@ -158,7 +147,6 @@ export function IncidentForm() {
     if (!form.summary.trim()) next.summary = "Summary is required.";
     if (!form.description.trim()) next.description = "Description is required.";
     if (!form.categoryId) next.categoryId = "Category is required.";
-    if (!form.subCategoryId) next.subCategoryId = "Sub category is required.";
     if (!form.priorityId) next.priorityId = "Priority is required.";
     if (!form.locationId) next.locationId = "Location is required.";
     setErrors(next);
@@ -200,7 +188,6 @@ export function IncidentForm() {
     setSubmitting(true);
 
     // Find display names for logging/info (optional)
-    const categoryName = categories.find((c) => c.categoryId === form.categoryId)?.categoryName;
     const priorityName = priorities.find((p) => p.priorityId === form.priorityId)?.priorityName;
     const impactName = impacts.find((i) => i.impactId === form.impactId)?.impactName;
     const urgencyName = urgencies.find((u) => u.urgencyId === form.urgencyId)?.urgencyName;
@@ -224,7 +211,10 @@ export function IncidentForm() {
 
     if (newIncident) {
       setSubmitted(true);
-      setTimeout(() => router.push(`/incidents/${newIncident.incidentId}`), 1200);
+      const detailPath = pathname.startsWith("/admin/incident")
+        ? `/admin/incident/${newIncident.incidentId}`
+        : `/incidents/${newIncident.incidentId}`;
+      setTimeout(() => router.push(detailPath), 1200);
     }
   }
 
@@ -233,9 +223,8 @@ export function IncidentForm() {
       caller: user?.fullName ?? "",
       contactNumber: user?.phone ?? "",
       emailId: user?.email ?? "",
-      categoryId: categories.length > 0 ? categories[0].categoryId : null,
+      categoryId: null,
       summary: "",
-      subCategoryId: null,
       description: "",
       priorityId: priorities.find((p) => p.priorityName.toLowerCase() === "medium")?.priorityId ?? priorities[0]?.priorityId ?? null,
       affectedAsset: "",
@@ -244,6 +233,7 @@ export function IncidentForm() {
       impactId: impacts.find((i) => i.impactName.toLowerCase() === "medium")?.impactId ?? impacts[0]?.impactId ?? null,
       urgencyId: urgencies.find((u) => u.urgencyName.toLowerCase() === "medium")?.urgencyId ?? urgencies[0]?.urgencyId ?? null,
     });
+    setSelectedCategory(null);
     setFiles([]);
     setErrors({});
     setFileError("");
@@ -273,6 +263,7 @@ export function IncidentForm() {
   }
 
   return (
+    <>
     <form onSubmit={handleSubmit} noValidate className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="grid grid-cols-1 gap-x-8 gap-y-5 md:grid-cols-2">
         <div>
@@ -322,20 +313,30 @@ export function IncidentForm() {
           <Label htmlFor="category" required>
             Category
           </Label>
-          <Select
+          <button
+            type="button"
             id="category"
-            value={form.categoryId ?? ""}
-            onChange={(e) => update("categoryId", e.target.value ? Number(e.target.value) : null)}
-            leadingIcon={<Grid3x3 />}
-            invalid={!!errors.categoryId}
+            onClick={() => setCategoryPickerOpen(true)}
+            className={`flex h-11 w-full items-center gap-2 rounded-lg border bg-white px-3 text-left text-sm shadow-sm outline-none transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand-100 ${
+              errors.categoryId ? "border-red-400" : "border-slate-300 focus-visible:border-brand-500"
+            }`}
           >
-            <option value="">Select a category</option>
-            {categories.map((c) => (
-              <option key={c.categoryId} value={c.categoryId}>
-                {c.categoryName}
-              </option>
-            ))}
-          </Select>
+            <Grid3x3 className="size-4 shrink-0 text-slate-400" />
+            <span className={selectedCategory ? "flex items-center gap-1 truncate text-slate-800" : "text-slate-400"}>
+              {selectedCategory ? (
+                <>
+                  {selectedCategory.parent?.categoryName && (
+                    <span className="text-slate-400">{selectedCategory.parent.categoryName}
+                      <ChevronRight className="mx-0.5 inline size-3 text-slate-300" />
+                    </span>
+                  )}
+                  {selectedCategory.categoryName}
+                </>
+              ) : (
+                "Select a category"
+              )}
+            </span>
+          </button>
           <FieldError message={errors.categoryId} />
         </div>
 
@@ -351,27 +352,6 @@ export function IncidentForm() {
             invalid={!!errors.summary}
           />
           <FieldError message={errors.summary} />
-        </div>
-
-        <div>
-          <Label htmlFor="subCategory" required>
-            Sub Category
-          </Label>
-          <Select
-            id="subCategory"
-            value={form.subCategoryId ?? ""}
-            onChange={(e) => update("subCategoryId", e.target.value ? Number(e.target.value) : null)}
-            leadingIcon={<Laptop />}
-            invalid={!!errors.subCategoryId}
-          >
-            <option value="">Select a sub category</option>
-            {filteredSubCategories.map((s) => (
-              <option key={s.subCategoryId} value={s.subCategoryId}>
-                {s.subCategoryName}
-              </option>
-            ))}
-          </Select>
-          <FieldError message={errors.subCategoryId} />
         </div>
 
         <div>
@@ -576,6 +556,13 @@ export function IncidentForm() {
         </Button>
       </div>
     </form>
+    <CategoryPickerModal
+      open={categoryPickerOpen}
+      initialCategoryId={form.categoryId}
+      onSelect={handleCategorySelect}
+      onClose={() => setCategoryPickerOpen(false)}
+    />
+    </>
   );
 }
 

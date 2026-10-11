@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ConflictException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
+import { uniqueCode } from "../../common/utils/code.util";
 import { Location } from "./entities/location.entity";
 import { CreateLocationDto, UpdateLocationDto } from "./dto/location.dto";
 
@@ -8,6 +9,7 @@ import { CreateLocationDto, UpdateLocationDto } from "./dto/location.dto";
 export class LocationService {
   constructor(@InjectRepository(Location) private repo: Repository<Location>) {}
   async create(dto: CreateLocationDto): Promise<Location> {
+    if (!dto.locationCode) dto.locationCode = await uniqueCode(this.repo, "locationCode", dto.locationName);
     const exists = await this.repo.findOne({ where: { locationCode: dto.locationCode } });
     if (exists) throw new ConflictException(`Code "${dto.locationCode}" already exists`);
     return this.repo.save(this.repo.create(dto));

@@ -39,7 +39,7 @@ export interface Incident {
 export interface IncidentActivity {
   activityId: number;
   incidentId: string;
-  type: "comment" | "work_note" | "status_change" | "assignment_change" | "priority_change" | "claimed" | "created";
+  type: "comment" | "work_note" | "status_change" | "assignment_change" | "priority_change" | "urgency_change" | "impact_change" | "claimed" | "created";
   content: string | null;
   meta: Record<string, unknown> | null;
   isWorkNote: boolean;
@@ -68,8 +68,18 @@ export interface UpdateIncidentDto {
   title?: string;
   description?: string;
   priority?: "Low" | "Medium" | "High" | "Critical";
+  impact?: string;
+  urgency?: string;
   status?: "Open" | "Assigned" | "In Progress" | "On Hold" | "Resolved" | "Closed";
   assignedTo?: number | null;
+  categoryId?: number;
+  subCategoryId?: number;
+  groupId?: number | null;
+  locationId?: number;
+  affectedAsset?: string;
+  businessService?: string;
+  contactNumber?: string;
+  department?: string;
 }
 
 export interface ResolveIncidentDto {
@@ -80,9 +90,37 @@ export interface ResolveIncidentDto {
   resolutionSubcategory?: string;
 }
 
+export interface AdminIncidentListFilters {
+  search?: string;
+  status?: string;
+  priority?: string;
+  impact?: string;
+  urgency?: string;
+  categoryId?: number | string;
+  subCategoryId?: number | string;
+  assignmentGroupId?: number | string;
+  assignedToId?: number | string;
+  createdById?: number | string;
+  locationId?: number | string;
+  createdFrom?: string;
+  createdTo?: string;
+  slaBreached?: boolean;
+}
+
+function buildIncidentQuery(filters: AdminIncidentListFilters = {}) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "" && value !== "All") params.set(key, String(value));
+  });
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
 export const IncidentsApi = {
   listMine: () => apiFetch<Incident[]>("/incidents/mine"),
   listAll: () => apiFetch<Incident[]>("/incidents"),
+  listAdmin: (filters?: AdminIncidentListFilters) =>
+    apiFetch<Incident[]>(`/incidents/admin-list${buildIncidentQuery(filters)}`),
   listAssignedToMe: () => apiFetch<Incident[]>("/incidents/assigned-to-me"),
   listWorkgroup: () => apiFetch<Incident[]>("/incidents/workgroup"),
   listGroupQueue: (groupId: number) =>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Pencil, Eye, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, MoreVertical } from "lucide-react";
 import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
@@ -13,14 +13,15 @@ import { useAdminWorkflows } from "@/lib/hooks/use-admin";
 import { Workflow } from "@/types/workflow";
 
 export default function AdminWorkflowsPage() {
-  const { workflows, isLoading, create, update } = useAdminWorkflows();
+  const { workflows, isLoading, create, update, remove } = useAdminWorkflows();
   const [dialog, setDialog] = useState(false);
   const [editWf, setEditWf] = useState<Workflow | null>(null);
+  const [deleteWf, setDeleteWf] = useState<Workflow | null>(null);
   const [saving, setSaving] = useState(false);
 
   const columns: Column<Workflow>[] = [
     { key: "workflowName", label: "Name", sortable: true,
-      render: (w) => <span className="font-medium">{w.workflowName}</span> },
+      render: (w) => <Link href={`/admin/workflows/${w.workflowId}`} className="font-medium hover:text-blue-600">{w.workflowName}</Link> },
     { key: "steps", label: "Steps",
       render: (w) => (
         <span className="text-slate-500">{w.steps?.length ?? 0} step{w.steps?.length !== 1 ? "s" : ""}</span>
@@ -37,17 +38,25 @@ export default function AdminWorkflowsPage() {
       render: (w) => (
         <div className="flex gap-1">
           <Link href={`/admin/workflows/${w.workflowId}`}
-            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600" title="Edit steps">
-            <Eye className="size-3.5" />
-          </Link>
-          <button onClick={() => { setEditWf(w); setDialog(true); }}
-            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600">
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600" title="Edit workflow">
             <Pencil className="size-3.5" />
+          </Link>
+          <button onClick={() => setDeleteWf(w)}
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-red-600" title="Delete workflow">
+            <Trash2 className="size-3.5" />
           </button>
         </div>
       ),
     },
   ];
+
+  const handleDelete = async () => {
+    if (!deleteWf) return;
+    const success = await remove(deleteWf.workflowId);
+    if (success) {
+      setDeleteWf(null);
+    }
+  };
 
   return (
     <div className="w-full">
@@ -71,6 +80,14 @@ export default function AdminWorkflowsPage() {
           return !!ok;
         }}
         onClose={() => { setDialog(false); setEditWf(null); }}
+      />
+
+      <ConfirmDialog
+        open={!!deleteWf}
+        title="Delete Workflow"
+        description={`Are you sure you want to delete "${deleteWf?.workflowName}"? This action cannot be undone.`}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteWf(null)}
       />
     </div>
   );

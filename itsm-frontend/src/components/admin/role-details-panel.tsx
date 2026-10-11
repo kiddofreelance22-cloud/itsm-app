@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Shield, ChevronDown, ChevronUp, Users, Check, LayoutGrid, X } from "lucide-react";
+import { Shield, ChevronUp, Users, Check, LayoutGrid, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/hooks/use-toast";
 import { RolesApi } from "@/lib/api/roles.api";
@@ -14,27 +14,45 @@ interface RoleDetailsPanelProps {
   role: Role;
   onClose: () => void;
   onRoleUpdated: () => void;
+  /** Opens the create/edit RoleFormDialog pre-filled for this role. */
+  onEditRole?: () => void;
 }
 
 export default function RoleDetailsPanel({
   role,
   onClose,
   onRoleUpdated,
+  onEditRole,
 }: RoleDetailsPanelProps) {
   const [activeTab, setActiveTab] = useState<RoleTab>("permissions");
   const [selectedPermissions, setSelectedPermissions] = useState<number[]>([]);
   const [allPermissions, setAllPermissions] = useState<Record<string, Permission[]>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
+  const [roleUsers, setRoleUsers] = useState<{ userId: number; fullName: string; email: string; isActive: boolean }[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     if (role) {
       loadRolePermissions();
       loadAllPermissions();
+      loadRoleUsers();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
+
+  const loadRoleUsers = async () => {
+    try {
+      setIsLoadingUsers(true);
+      const data = await RolesApi.getUsers(role.roleId);
+      setRoleUsers(data);
+    } catch (error: unknown) {
+      toast({ title: "Error", description: "Failed to load users for this role", variant: "error" });
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
 
   const loadRolePermissions = async () => {
     try {
@@ -131,16 +149,13 @@ export default function RoleDetailsPanel({
             <div className="flex items-center gap-4 mt-1 text-sm text-slate-500">
               <span className="font-medium text-slate-700">Role Code: {role.roleCode}</span>
               <span>|</span>
-              <span>Users: {role.userCount ?? 0}</span>
+              <span>Users: {roleUsers.length}</span>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-2 text-slate-600">
+          <Button variant="outline" size="sm" className="gap-2 text-slate-600" onClick={onEditRole}>
              Edit Role Details
-          </Button>
-          <Button variant="outline" size="sm" className="gap-2 text-slate-600">
-             More Actions <ChevronDown className="size-4" />
           </Button>
           <Button variant="ghost" size="icon" onClick={onClose} className="ml-2 text-slate-400 hover:text-slate-600">
             <X className="size-4" />
@@ -154,7 +169,7 @@ export default function RoleDetailsPanel({
           [
             { key: "details" as const, label: "Role Details" },
             { key: "permissions" as const, label: "Permissions" },
-            { key: "users" as const, label: `Users (${role.userCount ?? 0})` },
+            { key: "users" as const, label: `Users (${roleUsers.length})` },
             { key: "groups" as const, label: "Groups (2)" }, // Mock data to match screenshot
             { key: "audit" as const, label: "Audit Logs" },
           ] as Array<{ key: RoleTab; label: string }>
@@ -322,7 +337,49 @@ export default function RoleDetailsPanel({
           </div>
         )}
 
-        {activeTab !== "details" && activeTab !== "permissions" && (
+        {activeTab === "users" && (
+          <div className="space-y-3">
+            {isLoadingUsers ? (
+              <div className="py-12 text-center text-sm text-slate-500">Loading users...</div>
+            ) : roleUsers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+                <Users className="size-10 mb-2 opacity-30" />
+                <p className="text-sm">No users currently hold this role.</p>
+              </div>
+            ) : (
+              <div className="rounded-lg border bg-white overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-slate-50 text-xs font-semibold text-slate-600">
+                      <th className="px-4 py-3 text-left">Name</th>
+                      <th className="px-4 py-3 text-left">Email</th>
+                      <th className="px-4 py-3 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {roleUsers.map((u) => (
+                      <tr key={u.userId} className="hover:bg-slate-50/50">
+                        <td className="px-4 py-3 font-medium text-slate-800">{u.fullName}</td>
+                        <td className="px-4 py-3 text-slate-500">{u.email}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`text-xs rounded px-2 py-0.5 font-medium ${
+                            u.isActive
+                              ? "bg-green-50 text-green-700 border border-green-200"
+                              : "bg-red-50 text-red-700 border border-red-200"
+                          }`}>
+                            {u.isActive ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab !== "details" && activeTab !== "permissions" && activeTab !== "users" && (
           <div className="flex flex-col items-center justify-center py-12 text-slate-500">
             <Shield className="size-10 mb-2 opacity-30" />
             <p className="text-sm">This tab is not yet implemented.</p>

@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { AdminUser } from "@/types/admin";
+import { useDepartments } from "@/lib/hooks/use-departments";
+import { Department } from "@/lib/api/departments.api";
 
 interface UserFormDialogProps {
   open: boolean;
@@ -19,6 +21,7 @@ interface UserFormDialogProps {
     fullName: string;
     phone?: string;
     password?: string;
+    departmentId?: number;
     isActive?: boolean;
   }) => Promise<boolean>;
   onClose: () => void;
@@ -28,8 +31,9 @@ export function UserFormDialog({
   open, user, isLoading = false, onSubmit, onClose,
 }: UserFormDialogProps) {
   const isEdit = !!user;
+  const { departments } = useDepartments();
   const [form, setForm] = useState({
-    username: "", email: "", fullName: "", phone: "", password: "",
+    username: "", email: "", fullName: "", phone: "", password: "", departmentId: "",
   });
 
   useEffect(() => {
@@ -40,13 +44,14 @@ export function UserFormDialog({
         fullName: user.fullName,
         phone: user.phone ?? "",
         password: "",
+        departmentId: user.departmentId?.toString() ?? "",
       });
     } else {
-      setForm({ username: "", email: "", fullName: "", phone: "", password: "" });
+      setForm({ username: "", email: "", fullName: "", phone: "", password: "", departmentId: "" });
     }
   }, [user, open]);
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((prev) => ({ ...prev, [k]: e.target.value }));
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,6 +62,7 @@ export function UserFormDialog({
       fullName: form.fullName,
       phone: form.phone || undefined,
       password: form.password || undefined,
+      departmentId: form.departmentId ? Number(form.departmentId) : undefined,
     });
     if (ok) onClose();
   };
@@ -85,6 +91,21 @@ export function UserFormDialog({
           <div className="space-y-1.5">
             <Label>Phone</Label>
             <Input type="tel" value={form.phone} onChange={set("phone")} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Department</Label>
+            <select
+              value={form.departmentId}
+              onChange={set("departmentId")}
+              className="w-full h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm"
+            >
+              <option value="">Select department</option>
+              {departments.map((dept) => (
+                <option key={dept.departmentId} value={dept.departmentId}>
+                  {dept.departmentName}
+                </option>
+              ))}
+            </select>
           </div>
           {isEdit && (
             <div className="space-y-1.5">

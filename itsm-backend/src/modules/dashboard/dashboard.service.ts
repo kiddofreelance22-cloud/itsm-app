@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Between, IsNull, Not, In } from "typeorm";
+import { Repository, Between, IsNull, Not, In, MoreThan } from "typeorm";
 import { Incident } from "../incidents/entities/incident.entity";
 import { ServiceRequest } from "../requests/entities/request.entity";
 import { User } from "../users/entities/user.entity";
@@ -21,88 +21,133 @@ export class DashboardService {
     @InjectRepository(Change) private changeRepo: Repository<Change>,
   ) {}
 
+  /**
+   * Analyst-scoped dashboard. Everything here is filtered down to what the
+   * *current* analyst can actually act on: incidents/tasks/problems/changes
+   * assigned to them, plus the queues of the assignment groups they belong
+   * to — never system-wide totals. (System-wide reporting, if ever needed,
+   * belongs on a separate Admin/Ops dashboard endpoint, not this one.)
+   */
   async getAnalystStats(userId: number, from?: Date, to?: Date) {
     const dateFilter = from && to ? Between(from, to) : undefined;
     const baseWhere = dateFilter ? { createdAt: dateFilter } : {};
 
-    // Incident counts
+    // Groups this analyst belongs to — the scope boundary for everything below.
+    const groups = await this.groupRepo.find({ relations: { members: true } });
+    const myGroups = groups.filter((g) => g.members?.some((m) => m.userId === userId));
+    const userGroupIds = myGroups.map((g) => g.groupId);
+
+    // An incident is "mine" if it's assigned to me, or it's unassigned but
+    // sitting in one of my groups' queues.
+    const mineOrMyGroupQueue: any[] = [{ assignedTo: { userId } }];
+    if (userGroupIds.length > 0) {
+      mineOrMyGroupQueue.push({ assignmentGroup: { groupId: In(userGroupIds) }, assignedTo: IsNull() });
+    }
+    const scoped = (extra: Record<string, any> = {}) =>
+      mineOrMyGroupQueue.map((clause) => ({ ...clause, ...baseWhere, ...extra }));
+
+    // Incident counts (analyst-scoped)
     const [
       totalIncidents,
       openIncidents,
       inProgressIncidents,
+      assignedIncidents,
+      assignedOpenIncidents,
+      assignedInProgressIncidents,
+      assignedOnHoldIncidents,
+      assignedResolvedToday,
       resolvedToday,
-      myIncidents,
-      myOpenIncidentsCount,
-      myInProgressIncidentsCount,
-      myResolvedTodayCount,
+      myAssignedIncidents,
+      totalResolvedInWorkgroups,
+      totalIncidentsInWorkgroups,
+      totalResolvedInAllWorkgroups,
     ] = await Promise.all([
-      this.incidentRepo.count({ where: { ...baseWhere } }),
-      this.incidentRepo.count({ where: { ...baseWhere, status: "Open" } }),
-      this.incidentRepo.count({ where: { ...baseWhere, status: "In Progress" } }),
-      this.incidentRepo.count({ where: { status: "Resolved", resolvedAt: Between(this.todayStart(), new Date()) } }),
-      this.incidentRepo.count({ where: { assignedTo: { userId } } }),
-      // These are the "actionable to me" figures — what the engineer can actually
-      // click through to on this same dashboard, so the headline number on the
-      // Incidents card always matches something real in their own queue.
-      this.incidentRepo.count({ where: { assignedTo: { userId }, status: "Open" } }),
+      this.incidentRepo.count({ where: scoped() }),
+      this.incidentRepo.count({ where: scoped({ status: In(["Open", "Assigned"]) }) }),
+      this.incidentRepo.count({ where: scoped({ status: "In Progress" }) }),
+      this.incidentRepo.count({ where: { assignedTo: { userId }, status: Not(In(["Closed", "Resolved"])) } }),
+      this.incidentRepo.count({ where: { assignedTo: { userId }, status: In(["Open", "Assigned"]) } }),
       this.incidentRepo.count({ where: { assignedTo: { userId }, status: "In Progress" } }),
-      this.incidentRepo.count({ where: { assignedTo: { userId }, status: "Resolved", resolvedAt: Between(this.todayStart(), new Date()) } }),
+      this.incidentRepo.count({ where: { assignedTo: { userId }, status: "On Hold" } }),
+      this.incidentRepo.count({
+        where: { assignedTo: { userId }, status: "Resolved", resolvedAt: Between(this.todayStart(), new Date()) },
+      }),
+      this.incidentRepo.count({
+        where: scoped({ status: "Resolved", resolvedAt: Between(this.todayStart(), new Date()) }),
+      }),
+      this.incidentRepo.count({ where: { assignedTo: { userId } } }),
+      this.incidentRepo.count({ where: scoped({ status: "Resolved" }) }),
+      // Workgroup-wide totals (all incidents in user's groups, not just scoped)
+      this.incidentRepo.count({
+        where: userGroupIds.length > 0 
+          ? { assignmentGroup: { groupId: In(userGroupIds) }, status: Not(In(["Closed", "Resolved"])) }
+          : { assignedTo: { userId }, status: Not(In(["Closed", "Resolved"])) },
+      }),
+      this.incidentRepo.count({
+        where: userGroupIds.length > 0 
+          ? { assignmentGroup: { groupId: In(userGroupIds) }, status: "Resolved" }
+          : { assignedTo: { userId }, status: "Resolved" },
+      }),
     ]);
 
-    // Service Request counts
+    // Service Requests — the platform has no per-analyst fulfiller assignment
+    // for requests, so "mine" is what I personally raised/am tracking.
     const [totalRequests, openRequests, inProgressRequests, completedToday] = await Promise.all([
-      this.requestRepo.count({ where: { ...baseWhere } }),
-      this.requestRepo.count({ where: { ...baseWhere, status: "Submitted" } }),
-      this.requestRepo.count({ where: { ...baseWhere, status: "In Progress" } }),
-      this.requestRepo.count({ where: { status: "Approved" } }),
+      this.requestRepo.count({ where: { requestedBy: { userId }, ...baseWhere } }),
+      this.requestRepo.count({ where: { requestedBy: { userId }, ...baseWhere, status: "Submitted" } }),
+      this.requestRepo.count({ where: { requestedBy: { userId }, ...baseWhere, status: "In Progress" } }),
+      this.requestRepo.count({ where: { requestedBy: { userId }, status: "Approved" } }),
     ]);
 
-    // Problem counts
+    // Problem counts (assigned to me)
     const [totalProblems, openProblems, inProgressProblems, problemsResolvedToday] = await Promise.all([
-      this.problemRepo.count({ where: { ...baseWhere } }),
-      this.problemRepo.count({ where: { ...baseWhere, status: "Open" } }),
-      this.problemRepo.count({ where: { ...baseWhere, status: "In Progress" } }),
-      this.problemRepo.count({ where: { resolvedAt: Between(this.todayStart(), new Date()) } }),
+      this.problemRepo.count({ where: { assignedTo: { userId }, ...baseWhere } }),
+      this.problemRepo.count({ where: { assignedTo: { userId }, ...baseWhere, status: "Open" } }),
+      this.problemRepo.count({ where: { assignedTo: { userId }, ...baseWhere, status: "In Progress" } }),
+      this.problemRepo.count({
+        where: { assignedTo: { userId }, resolvedAt: Between(this.todayStart(), new Date()) },
+      }),
     ]);
 
-    // Change counts
+    // Change counts (assigned to me)
     const [totalChanges, openChanges, inProgressChanges, changesCompletedToday] = await Promise.all([
-      this.changeRepo.count({ where: { ...baseWhere } }),
-      this.changeRepo.count({ where: { ...baseWhere, status: "Open" } }),
-      this.changeRepo.count({ where: { ...baseWhere, status: "In Progress" } }),
-      this.changeRepo.count({ where: { completedAt: Between(this.todayStart(), new Date()) } }),
+      this.changeRepo.count({ where: { assignedTo: { userId }, ...baseWhere } }),
+      this.changeRepo.count({ where: { assignedTo: { userId }, ...baseWhere, status: "Open" } }),
+      this.changeRepo.count({ where: { assignedTo: { userId }, ...baseWhere, status: "In Progress" } }),
+      this.changeRepo.count({
+        where: { assignedTo: { userId }, completedAt: Between(this.todayStart(), new Date()) },
+      }),
     ]);
 
-    // Task counts
+    // Task counts (assigned to me)
     const [totalTasks, openTasks, overdueTasks] = await Promise.all([
-      this.taskRepo.count({ where: { ...baseWhere } }),
-      this.taskRepo.count({ where: { ...baseWhere, status: "Open" } }),
+      this.taskRepo.count({ where: { assignedTo: { userId }, ...baseWhere } }),
+      this.taskRepo.count({ where: { assignedTo: { userId }, ...baseWhere, status: "Open" } }),
       this.taskRepo
         .createQueryBuilder("task")
-        .where("task.due_date IS NOT NULL")
+        .where("task.assigned_to = :userId", { userId })
+        .andWhere("task.due_date IS NOT NULL")
         .andWhere("task.due_date < :now", { now: new Date() })
         .andWhere("task.status NOT IN (:...done)", { done: ["Completed", "Cancelled"] })
         .getCount(),
     ]);
 
-    // Approval counts. A request's status is "In Progress" while it's sitting on a
-    // workflow step awaiting an approver, and flips to "Approved" once the workflow
-    // finishes — see RequestsService.advanceWorkflow.
+    // Approvals — requests I personally raised that are pending/approved.
+    // (Workflow-approver-specific queues are covered by the My Approvals page.)
     const [pendingApprovals, approvedApprovals] = await Promise.all([
-      this.requestRepo.count({ where: { status: "In Progress" } }),
-      this.requestRepo.count({ where: { status: "Approved" } }),
+      this.requestRepo.count({ where: { requestedBy: { userId }, status: "In Progress" } }),
+      this.requestRepo.count({ where: { requestedBy: { userId }, status: "Approved" } }),
     ]);
 
-    // SLA stats
-    const slaBreached = await this.incidentRepo.count({ where: { slaBreached: true } });
-    const slaTotal = await this.incidentRepo.count();
-    const slaMet = await this.incidentRepo.count({ where: { slaResponseMet: true } });
+    // SLA stats — scoped to incidents assigned to me.
+    const slaBreached = await this.incidentRepo.count({ where: { assignedTo: { userId }, slaBreached: true } });
+    const slaTotal = await this.incidentRepo.count({ where: { assignedTo: { userId } } });
+    const slaMet = await this.incidentRepo.count({ where: { assignedTo: { userId }, slaResponseMet: true } });
     const slaAtRisk = Math.max(0, slaTotal - slaMet - slaBreached);
 
-    // Unassigned by group
-    const groups = await this.groupRepo.find({ relations: { members: true } });
+    // Unassigned tickets — only within groups I'm a member of.
     const unassignedByGroup = await Promise.all(
-      groups.map(async (g) => ({
+      myGroups.map(async (g) => ({
         groupId: g.groupId,
         groupName: g.groupName,
         incidentCount: await this.incidentRepo.count({
@@ -112,37 +157,34 @@ export class DashboardService {
       }))
     );
 
-    // Priority distribution
+    // Priority distribution — within my scope (assigned to me / my group queues)
     const priorities = ["Low", "Medium", "High", "Critical"] as const;
     const byPriority = await Promise.all(
       priorities.map(async (p) => ({
         priority: p,
-        count: await this.incidentRepo.count({ where: { priority: p } }),
+        count: await this.incidentRepo.count({ where: scoped({ priority: p }) }),
       }))
     );
 
-    // Status distribution
+    // Status distribution — within my scope
     const statuses = ["Open", "Assigned", "In Progress", "On Hold", "Resolved", "Closed"] as const;
     const byStatus = await Promise.all(
       statuses.map(async (s) => ({
         status: s,
-        count: await this.incidentRepo.count({ where: { status: s as any } }),
+        count: await this.incidentRepo.count({ where: scoped({ status: s as any }) }),
       }))
     );
 
-    // My open incidents (assigned to me, OR unassigned in my groups)
-    const userGroupIds = groups
-      .filter((g) => g.members?.some((m) => m.userId === userId))
-      .map((g) => g.groupId);
-
+    // My open incidents (assigned to me, OR unassigned in my groups) —
+    // "open" must exclude both terminal statuses, not just Closed.
     const myOpenIncidentsWhere: any[] = [
-      { assignedTo: { userId }, status: Not("Closed") },
+      { assignedTo: { userId }, status: Not(In(["Closed", "Resolved"])) },
     ];
     if (userGroupIds.length > 0) {
       myOpenIncidentsWhere.push({
         assignmentGroup: { groupId: In(userGroupIds) },
         assignedTo: IsNull(),
-        status: Not("Closed"),
+        status: Not(In(["Closed", "Resolved"])),
       });
     }
 
@@ -150,10 +192,9 @@ export class DashboardService {
       where: myOpenIncidentsWhere,
       relations: { category: true, assignmentGroup: true },
       order: { createdAt: "DESC" },
-      take: 5,
     });
 
-    // My open service requests
+    // My open service requests (raised by me)
     const myOpenRequests = await this.requestRepo.find({
       where: { requestedBy: { userId } },
       relations: { catalog: true },
@@ -161,9 +202,8 @@ export class DashboardService {
       take: 5,
     });
 
-    // Unassigned tickets total
-    const unassignedTotal = await this.incidentRepo.count({ where: { assignedTo: IsNull() } });
-    const unassignedIncidents = await this.incidentRepo.count({ where: { assignedTo: IsNull() } });
+    // Unassigned tickets total — within my groups only.
+    const unassignedTotal = unassignedByGroup.reduce((sum, g) => sum + g.incidentCount, 0);
 
     return {
       incidents: {
@@ -171,10 +211,16 @@ export class DashboardService {
         open: openIncidents,
         inProgress: inProgressIncidents,
         resolvedToday,
-        mine: myIncidents,
-        mineOpen: myOpenIncidentsCount,
-        mineInProgress: myInProgressIncidentsCount,
-        mineResolvedToday: myResolvedTodayCount,
+        mine: myAssignedIncidents,
+        mineOpen: assignedIncidents, // All assigned incidents except Closed/Resolved
+        mineInProgress: assignedInProgressIncidents,
+        mineResolvedToday: assignedResolvedToday,
+        assignedOpen: assignedOpenIncidents, // Only Open status
+        assignedInProgress: assignedInProgressIncidents, // Only In Progress status
+        assignedOnHold: assignedOnHoldIncidents, // Only On Hold status
+        totalResolvedInWorkgroups, // Total resolved incidents in my assigned workgroups
+        totalInWorkgroups: totalIncidentsInWorkgroups, // Total incidents in my workgroups (group-wide)
+        totalResolvedInAllWorkgroups, // Total resolved incidents in my workgroups (group-wide)
       },
       serviceRequests: {
         total: totalRequests,
@@ -206,7 +252,7 @@ export class DashboardService {
       },
       unassigned: {
         total: unassignedTotal,
-        incidents: unassignedIncidents,
+        incidents: unassignedTotal,
         serviceRequests: 0,
         tasks: 0,
       },
@@ -250,6 +296,216 @@ export class DashboardService {
         updatedAgo: this.timeAgo(new Date(r.createdAt)),
       })),
       unassignedByGroup: unassignedByGroup.filter((g) => g.incidentCount > 0 || g.requestCount > 0),
+    };
+  }
+
+
+  // ---------------------------------------------------------------------
+  // END USER dashboard — only incidents this user reported.
+  // ---------------------------------------------------------------------
+  async getEndUserDashboard(userId: number) {
+    const mine = await this.incidentRepo.find({
+      where: { createdBy: { userId } },
+      relations: { assignmentGroup: true },
+      order: { createdAt: "DESC" },
+    });
+
+    const row = (i: Incident) => ({
+      incidentId: i.incidentId,
+      id: i.incidentCode ?? i.incidentId,
+      shortDescription: i.title,
+      priority: i.priority,
+      status: i.status,
+      assignedWorkgroup: i.assignmentGroup?.groupName ?? "—",
+      reported: i.createdAt,
+      rating: i.feedbackRating ?? 0,
+    });
+
+    const open = mine.filter((i) => !["Resolved", "Closed"].includes(i.status));
+    const resolved = mine.filter((i) => i.status === "Resolved");
+    const closed = mine.filter((i) => i.status === "Closed");
+    const needsFeedback = resolved.filter((i) => !i.feedbackRating);
+
+    return {
+      stats: {
+        total: mine.length,
+        open: open.length,
+        resolved: resolved.length,
+        needsFeedback: needsFeedback.length,
+      },
+      openTickets: open.map(row),
+      recentlyClosed: closed.slice(0, 5).map(row),
+      needsFeedback: needsFeedback.map((i) => ({ ...row(i), resolvedAt: i.resolvedAt ?? i.updatedAt })),
+    };
+  }
+
+  // ---------------------------------------------------------------------
+  // RESOLVER dashboard — my queue, my groups' unassigned queue, SLA risks.
+  // Pending approvals come from the existing GET /approvals endpoint.
+  // ---------------------------------------------------------------------
+  async getResolverDashboard(userId: number) {
+    const groups = await this.groupRepo.find({ relations: { members: true } });
+    const myGroups = groups.filter((g) => g.members?.some((m) => m.userId === userId));
+    const groupIds = myGroups.map((g) => g.groupId);
+    const notDone = Not(In(["Resolved", "Closed"]));
+
+    const myOpen = await this.incidentRepo.find({
+      where: { assignedTo: { userId }, status: notDone },
+      relations: { assignmentGroup: true, assignedTo: true },
+      order: { updatedAt: "DESC" },
+      take: 50,
+    });
+
+    const unassigned = groupIds.length
+      ? await this.incidentRepo.find({
+          where: { assignmentGroup: { groupId: In(groupIds) }, assignedTo: IsNull(), status: notDone },
+          relations: { assignmentGroup: true },
+          order: { createdAt: "ASC" },
+          take: 50,
+        })
+      : [];
+
+    const soon = Date.now() + 4 * 3600 * 1000;
+    const slaLabel = (i: Incident) => {
+      if (i.status === "On Hold") return "Paused";
+      if (i.slaBreached) return "Breached";
+      if (i.slaResolutionTarget) {
+        const ms = new Date(i.slaResolutionTarget).getTime() - Date.now();
+        if (ms <= 0) return "Breached";
+        if (ms <= 4 * 3600 * 1000) return `Due in ${Math.max(1, Math.round(ms / 3600000))}h`;
+      }
+      return "On track";
+    };
+    const row = (i: Incident) => ({
+      incidentId: i.incidentId,
+      id: i.incidentCode ?? i.incidentId,
+      shortDescription: i.title,
+      priority: i.priority,
+      status: i.status,
+      sla: slaLabel(i),
+      assignmentGroup: i.assignmentGroup?.groupName ?? "—",
+      assignedTo: i.assignedTo?.fullName ?? "Unassigned",
+      updatedAt: i.updatedAt,
+      updatedAgo: this.timeAgo(i.updatedAt),
+    });
+
+    const slaAttention = myOpen
+      .filter(
+        (i) =>
+          i.status !== "On Hold" &&
+          (i.slaBreached ||
+            (i.slaResolutionTarget && new Date(i.slaResolutionTarget).getTime() <= soon)),
+      )
+      .map((i) => ({
+        incidentId: i.incidentId,
+        id: i.incidentCode ?? i.incidentId,
+        shortDescription: i.title,
+        reason: i.slaBreached || new Date(i.slaResolutionTarget!).getTime() <= Date.now() ? "SLA breached" : "Due within 4h",
+      }));
+
+    return {
+      stats: {
+        assignedToMe: myOpen.length,
+        myOpen: myOpen.filter((i) => ["Assigned", "In Progress"].includes(i.status)).length,
+        slaPaused: myOpen.filter((i) => i.status === "On Hold").length,
+        unassigned: unassigned.length,
+      },
+      myQueue: myOpen.map(row),
+      unassigned: unassigned.map(row),
+      slaAttention,
+      groups: myGroups.map((g) => ({ groupId: g.groupId, groupName: g.groupName })),
+    };
+  }
+
+  // ---------------------------------------------------------------------
+  // ADMIN dashboard — system-wide totals. Restricted to Admin in the controller.
+  // ---------------------------------------------------------------------
+  async getAdminDashboard() {
+    const notDone = Not(In(["Resolved", "Closed"]));
+    const start = this.todayStart();
+
+    const [
+      totalIncidents, openIncidents, unassignedIncidents, resolvedToday,
+      breached, activeUsers, totalUsers, totalGroups,
+    ] = await Promise.all([
+      this.incidentRepo.count(),
+      this.incidentRepo.count({ where: { status: notDone } }),
+      this.incidentRepo.count({ where: { assignedTo: IsNull(), status: notDone } }),
+      this.incidentRepo.count({ where: { resolvedAt: MoreThan(start) } }),
+      this.incidentRepo.count({ where: { slaBreached: true } }),
+      this.userRepo.count({ where: { isActive: true } }),
+      this.userRepo.count(),
+      this.groupRepo.count(),
+    ]);
+
+    const statuses = ["Open", "Assigned", "In Progress", "On Hold", "Resolved", "Closed"];
+    const priorities = ["Critical", "High", "Medium", "Low"];
+    const byStatus = await Promise.all(
+      statuses.map(async (s) => ({ status: s, count: await this.incidentRepo.count({ where: { status: s as any } }) })),
+    );
+    const byPriority = await Promise.all(
+      priorities.map(async (p) => ({ priority: p, count: await this.incidentRepo.count({ where: { priority: p as any, status: notDone } }) })),
+    );
+
+    const byGroupRaw = await this.incidentRepo
+      .createQueryBuilder("i")
+      .leftJoin("i.assignmentGroup", "g")
+      .select("COALESCE(g.group_name, 'Unassigned')", "groupName")
+      .addSelect("COUNT(*)", "count")
+      .where("i.status NOT IN (:...done)", { done: ["Resolved", "Closed"] })
+      .groupBy("g.group_name")
+      .orderBy("COUNT(*)", "DESC")
+      .limit(8)
+      .getRawMany();
+
+    // Last 7 days: created vs resolved
+    const trend: { day: string; created: number; resolved: number }[] = [];
+    for (let d = 6; d >= 0; d--) {
+      const from = new Date(start); from.setDate(from.getDate() - d);
+      const to = new Date(from); to.setDate(to.getDate() + 1);
+      trend.push({
+        day: from.toISOString().slice(0, 10),
+        created: await this.incidentRepo.count({ where: { createdAt: Between(from, to) } }),
+        resolved: await this.incidentRepo.count({ where: { resolvedAt: Between(from, to) } }),
+      });
+    }
+
+    const rated = await this.incidentRepo
+      .createQueryBuilder("i")
+      .select("AVG(i.feedback_rating)", "avg")
+      .addSelect("COUNT(i.feedback_rating)", "n")
+      .where("i.feedback_rating IS NOT NULL")
+      .getRawOne();
+
+    const recent = await this.incidentRepo.find({
+      relations: { assignmentGroup: true, assignedTo: true },
+      order: { createdAt: "DESC" },
+      take: 8,
+    });
+
+    return {
+      stats: {
+        totalIncidents, openIncidents, unassignedIncidents, resolvedToday,
+        slaBreached: breached,
+        slaCompliance: totalIncidents ? Math.round(((totalIncidents - breached) / totalIncidents) * 100) : 100,
+        activeUsers, totalUsers, totalGroups,
+        avgRating: rated?.avg ? Number(Number(rated.avg).toFixed(1)) : null,
+        ratingCount: Number(rated?.n ?? 0),
+      },
+      byStatus,
+      byPriority,
+      byGroup: byGroupRaw.map((r) => ({ groupName: r.groupName, count: Number(r.count) })),
+      trend,
+      recent: recent.map((i) => ({
+        incidentId: i.incidentId,
+        id: i.incidentCode ?? i.incidentId,
+        shortDescription: i.title,
+        priority: i.priority,
+        status: i.status,
+        assignmentGroup: i.assignmentGroup?.groupName ?? "—",
+        assignedTo: i.assignedTo?.fullName ?? "Unassigned",
+        createdAt: i.createdAt,
+      })),
     };
   }
 

@@ -1,5 +1,5 @@
 import { apiFetch } from "./client";
-import { Status, Priority, Impact, Urgency, SubCategory, AssignmentGroup, Location } from "@/types/admin";
+import { Status, Priority, Impact, Urgency, SubCategory, AssignmentGroup, Location, ServiceCategory, ServiceImpact, ServiceCompletion, ClosureCode, PendingReason, PriorityMatrix, SlaServiceWindow } from "@/types/admin";
 
 // ── Status ────────────────────────────────────────────────────────────────────
 export const StatusApi = {
@@ -51,7 +51,19 @@ export const AssignmentGroupApi = {
     apiFetch<AssignmentGroup>(`/assignment-groups/${groupId}/members/${userId}`, { method: "POST" }),
   removeMember: (groupId: number, userId: number) =>
     apiFetch<AssignmentGroup>(`/assignment-groups/${groupId}/members/${userId}`, { method: "DELETE" }),
+  /** Workgroups the current user belongs to, with real assigned-to-me / total incident counts. */
+  myWorkgroups: () =>
+    apiFetch<MyWorkgroup[]>("/assignment-groups/my-workgroups"),
 };
+
+export interface MyWorkgroup {
+  groupId: number;
+  groupName: string;
+  groupCode: string;
+  assignedToMe: number;
+  totalIncidents: number;
+  resolvedTickets: number;
+}
 
 // ── Location ──────────────────────────────────────────────────────────────────
 export const LocationApi = {
@@ -59,4 +71,49 @@ export const LocationApi = {
   create: (body: object) => apiFetch<Location>("/locations", { method: "POST", body: JSON.stringify(body) }),
   update: (id: number, body: object) => apiFetch<Location>(`/locations/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   remove: (id: number) => apiFetch<void>(`/locations/${id}`, { method: "DELETE" }),
+};
+
+// ── Service request masters ─────────────────────────────────────────────────
+export const ServiceCategoryApi = {
+  list: () => apiFetch<ServiceCategory[]>("/service-categories"),
+  create: (body: object) => apiFetch<ServiceCategory>("/service-categories", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: number, body: object) => apiFetch<ServiceCategory>(`/service-categories/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  remove: (id: number) => apiFetch<void>(`/service-categories/${id}`, { method: "DELETE" }),
+};
+export const ServiceImpactApi = {
+  list: () => apiFetch<ServiceImpact[]>("/service-impacts"),
+  create: (body: object) => apiFetch<ServiceImpact>("/service-impacts", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: number, body: object) => apiFetch<ServiceImpact>(`/service-impacts/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  remove: (id: number) => apiFetch<void>(`/service-impacts/${id}`, { method: "DELETE" }),
+};
+export const ServiceCompletionApi = {
+  list: () => apiFetch<ServiceCompletion[]>("/service-completions"),
+  create: (body: object) => apiFetch<ServiceCompletion>("/service-completions", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: number, body: object) => apiFetch<ServiceCompletion>(`/service-completions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  remove: (id: number) => apiFetch<void>(`/service-completions/${id}`, { method: "DELETE" }),
+};
+
+export const ClosureCodeApi = {
+  list: () => apiFetch<ClosureCode[]>("/closure-codes"),
+  create: (body: object) => apiFetch<ClosureCode>("/closure-codes", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: number, body: object) => apiFetch<ClosureCode>(`/closure-codes/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  remove: (id: number) => apiFetch<void>(`/closure-codes/${id}`, { method: "DELETE" }),
+};
+export const PendingReasonApi = {
+  list: () => apiFetch<PendingReason[]>("/pending-reasons"),
+  create: (body: object) => apiFetch<PendingReason>("/pending-reasons", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: number, body: object) => apiFetch<PendingReason>(`/pending-reasons/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  remove: (id: number) => apiFetch<void>(`/pending-reasons/${id}`, { method: "DELETE" }),
+};
+export const PriorityMatrixApi = {
+  list: () => apiFetch<PriorityMatrix[]>("/priority-matrices"),
+  create: (body: object) => apiFetch<PriorityMatrix>("/priority-matrices", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: number, body: object) => apiFetch<PriorityMatrix>(`/priority-matrices/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  remove: (id: number) => apiFetch<void>(`/priority-matrices/${id}`, { method: "DELETE" }),
+};
+export const SlaServiceWindowApi = {
+  list: () => apiFetch<SlaServiceWindow[]>("/sla-service-windows"),
+  create: (body: object) => apiFetch<SlaServiceWindow>("/sla-service-windows", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: number, body: object) => apiFetch<SlaServiceWindow>(`/sla-service-windows/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  remove: (id: number) => apiFetch<void>(`/sla-service-windows/${id}`, { method: "DELETE" }),
 };

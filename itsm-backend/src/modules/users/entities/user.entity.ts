@@ -5,6 +5,7 @@ import {
 import { UserRole } from "../../roles/entities/user-role.entity";
 import { AssignmentGroup } from "../../assignment-group/entities/assignment-group.entity";
 import { Role } from "../../roles/entities/role.entity";
+import { Department } from "../../departments/entities/department.entity";
 
 export type UserType    = "Internal" | "External" | "Partner";
 export type AuthType    = "Internal" | "LDAP" | "SAML" | "OAuth";
@@ -71,8 +72,12 @@ export class User {
   @Column({ name: "job_title", nullable: true })
   jobTitle!: string;
 
-  @Column({ name: "department", nullable: true })
-  department!: string;
+  @Column({ name: "department_id", nullable: true })
+  departmentId?: number;
+
+  @ManyToOne(() => Department, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "department_id" })
+  department?: Department;
 
   @Column({ name: "manager_name", nullable: true })
   managerName!: string;

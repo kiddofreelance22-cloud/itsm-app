@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Patch, Delete,
-  Body, Param, UseGuards, HttpCode, HttpStatus,
+  Body, Param, Query, UseGuards, HttpCode, HttpStatus,
 } from "@nestjs/common";
 import { ApiTags, ApiBearerAuth } from "@nestjs/swagger";
 import { IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString } from "class-validator";
@@ -13,6 +13,7 @@ import { ParseIntPipe } from "../../common/pipes/parse-int.pipe";
 import { IncidentsService } from "./incidents.service";
 import { IncidentsGateway } from "./incidents.gateway";
 import { CreateIncidentDto } from "./dto/create-incident.dto";
+import { AdminIncidentQueryDto } from "./dto/admin-incident-query.dto";
 import { UpdateIncidentDto } from "./dto/update-incident.dto";
 import { AssignGroupDto } from "./dto/assign-group.dto";
 
@@ -65,6 +66,12 @@ export class IncidentsController {
   @Get("workgroup")
   findWorkgroup(@CurrentUser("userId") userId: number) { return this.svc.findForWorkgroup(userId); }
 
+  @Get("admin-list")
+  @Roles("Admin")
+  findAdminList(@Query() query: AdminIncidentQueryDto) {
+    return this.svc.findAdminList(query);
+  }
+
   @Get("queue/:groupId")
   getGroupQueue(
     @Param("groupId", ParseIntPipe) groupId: number,
@@ -76,10 +83,27 @@ export class IncidentsController {
 
   @Get()
   @Roles("Admin", "Fulfiller")
-  findAll() { return this.svc.findAll(); }
+  findAll(
+    @CurrentUser("userId") userId: number,
+    @CurrentUser("roles") roles: string[],
+    @Query("assignmentGroupId") assignmentGroupId?: string,
+    @Query("assignedToUserId") assignedToUserId?: string,
+    @Query("openOnly") openOnly?: string,
+  ) {
+    if (assignmentGroupId || assignedToUserId) {
+      return this.svc.findFiltered({
+        groupId: assignmentGroupId ? Number(assignmentGroupId) : undefined,
+        assignedToUserId: assignedToUserId ? Number(assignedToUserId) : undefined,
+        openOnly: openOnly === "true",
+      });
+    }
+    return roles?.some((role) => ["Admin", "Administrator"].includes(role))
+      ? this.svc.findAll()
+      : this.svc.findForWorkgroup(userId);
+  }
 
   @Get(":id")
-  findOne(@Param("id") id: string) { return this.svc.findOne(id); }
+  findOne(@Param("id") id: string, @CurrentUser("userId") userId: number, @CurrentUser("roles") roles: string[]) { return this.svc.assertCanAccess(id, userId, roles ?? []); }
 
   @Post(":id/claim")
   @HttpCode(HttpStatus.OK)
@@ -118,13 +142,14 @@ export class IncidentsController {
   }
 
   @Post(":id/resolve")
+  @Roles("Admin", "Fulfiller")
   @HttpCode(HttpStatus.OK)
   async resolve(
     @Param("id") id: string,
     @CurrentUser("userId") userId: number,
     @Body() dto: ResolveIncidentDto,
   ) {
-    const incident = await this.svc.update(id, { status: "Resolved" }, userId);
+    const incident = await this.svc.update(id, { status: "Resolved", resolutionNotes: dto.resolutionNotes, resolutionCode: dto.resolutionCode }, userId);
     await this.svc.addComment(
       id, userId,
       `Resolved: ${dto.resolutionNotes}${dto.additionalComments ? "\n\n" + dto.additionalComments : ""}`,
@@ -139,8 +164,9 @@ export class IncidentsController {
     @Param("id") id: string,
     @Body() dto: UpdateIncidentDto,
     @CurrentUser("userId") userId: number,
+    @CurrentUser("roles") roles: string[],
   ) {
-    const incident = await this.svc.update(id, dto, userId);
+    const incident = await this.svc.update(id, dto, userId, roles ?? []);
     this.gateway.emitIncidentUpdated(id, incident);
     return incident;
   }
@@ -150,18 +176,19 @@ export class IncidentsController {
   remove(@Param("id") id: string) { return this.svc.remove(id); }
 
   @Get(":id/activity")
-  getActivity(@Param("id") id: string) { return this.svc.getActivity(id); }
+  getActivity(@Param("id") id: string, @CurrentUser("userId") userId: number, @CurrentUser("roles") roles: string[]) { return this.svc.getActivity(id, { userId, roles: roles ?? [] }); }
 
   @Get(":id/activities")
-  getActivities(@Param("id") id: string) { return this.svc.getActivity(id); }
+  getActivities(@Param("id") id: string, @CurrentUser("userId") userId: number, @CurrentUser("roles") roles: string[]) { return this.svc.getActivity(id, { userId, roles: roles ?? [] }); }
 
   @Post(":id/activity")
   async addActivity(
     @Param("id") id: string,
     @CurrentUser("userId") userId: number,
+    @CurrentUser("roles") roles: string[],
     @Body() dto: CreateCommentDto,
   ) {
-    const activity = await this.svc.addComment(id, userId, dto.content, dto.isWorkNote);
+    const activity = await this.svc.addComment(id, userId, dto.content, dto.isWorkNote, roles ?? []);
     this.gateway.emitActivityAdded(id, activity);
     return activity;
   }
@@ -170,23 +197,25 @@ export class IncidentsController {
   async addActivities(
     @Param("id") id: string,
     @CurrentUser("userId") userId: number,
+    @CurrentUser("roles") roles: string[],
     @Body() dto: CreateCommentDto,
   ) {
-    const activity = await this.svc.addComment(id, userId, dto.content, dto.isWorkNote);
+    const activity = await this.svc.addComment(id, userId, dto.content, dto.isWorkNote, roles ?? []);
     this.gateway.emitActivityAdded(id, activity);
     return activity;
   }
 
   @Get(":id/comments")
-  getComments(@Param("id") id: string) { return this.svc.getActivity(id); }
+  getComments(@Param("id") id: string, @CurrentUser("userId") userId: number, @CurrentUser("roles") roles: string[]) { return this.svc.getActivity(id, { userId, roles: roles ?? [] }); }
 
   @Post(":id/comments")
   async addComment(
     @Param("id") id: string,
     @CurrentUser("userId") userId: number,
+    @CurrentUser("roles") roles: string[],
     @Body() dto: CreateCommentDto,
   ) {
-    const activity = await this.svc.addComment(id, userId, dto.content, false);
+    const activity = await this.svc.addComment(id, userId, dto.content, false, roles ?? []);
     this.gateway.emitActivityAdded(id, activity);
     return activity;
   }

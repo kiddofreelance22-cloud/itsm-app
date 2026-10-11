@@ -1,8 +1,21 @@
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
-let BASE_URL = rawApiUrl && rawApiUrl.length > 0 ? rawApiUrl : "http://50.6.45.238:4000";
+const BASE_URL = rawApiUrl && rawApiUrl.length > 0 ? rawApiUrl : "http://50.6.45.238:4000";
 
-if (typeof window !== "undefined" && (BASE_URL.includes("50.6.45.238") || BASE_URL.includes("127.0.0.1")) && !window.location.hostname.includes("50.6.45.238") && !window.location.hostname.includes("127.0.0.1")) {
-  BASE_URL = `${window.location.protocol}//${window.location.hostname}:4000`;
+/**
+ * Resolves a persisted-upload path (e.g. "/uploads/xyz.png", as returned by
+ * POST /uploads and stored verbatim on Catalog.iconUrl/bannerUrl and
+ * CatalogAttachment.storagePath) into an absolute URL the browser can load.
+ * Already-absolute URLs (http(s)://...) are returned unchanged so existing
+ * external image URLs keep working.
+ */
+export function resolveAssetUrl(path?: string | null): string {
+  if (!path) return "";
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${BASE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
+}
+
+export function getApiBaseUrl(): string {
+  return BASE_URL;
 }
 
 const TOKEN_KEY = "itsm_token";
@@ -106,15 +119,17 @@ export async function apiFetch<T>(
       throw new ApiError(res.status, message);
     }
 
-    // Backend wraps every response: { success: true, data: T }
-    const body = await res.json();
-    const response = (body?.data ?? body) as T;
+    // DELETE endpoints may return 204 (or another successful empty response).
+    // Treat that as success instead of trying to parse an absent JSON body.
+    const responseText = res.status === 204 ? "" : await res.text();
+    const body = responseText ? JSON.parse(responseText) : undefined;
+    const response = body?.data ?? body;
 
     if (method !== "GET") {
       invalidateApiCache();
     }
 
-    return response;
+    return response as T;
   })();
 
   if (isGetRequest && typeof window !== "undefined") {

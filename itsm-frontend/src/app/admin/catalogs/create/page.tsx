@@ -8,12 +8,12 @@ export default function CreateCatalogPage() {
   const { create } = useCatalogs("all");
 
   return (
-    <div className="h-full flex flex-col -m-4 sm:-m-6 lg:-m-8">
+    <div className="min-h-screen flex flex-col">
       <CatalogEditor
         mode="create"
         catalog={null}
         onSave={async (data: CreateCatalogDto) => create(data)}
-        onCreateVar={async () => {}}
+        onCreateVar={async () => null}
         onUpdateVar={async () => {}}
         onRemoveVar={async () => {}}
       />

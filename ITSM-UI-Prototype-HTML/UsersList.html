@@ -1,0 +1,863 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Users</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+html, body { margin: 0; padding: 0; }
+body { display: flex; justify-content: center; background: #E4E7EC; padding: 20px 0; box-sizing: border-box; font-family: 'Public Sans', sans-serif; }
+
+  body { margin: 0; font-family: 'Public Sans', sans-serif; background: #F7F8FA; }
+  a { color: #175CD3; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .tree-grp { font-size: 10.5px; font-weight: 800; color: #8A94A6; text-transform: uppercase; letter-spacing: 0.6px; padding: 14px 14px 6px 14px; margin-top: 4px; display: flex; align-items: center; gap: 6px; border-top: 1px solid #EDEFF2; }
+  .tree-grp:first-child { border-top: none; margin-top: 0; padding-top: 10px; }
+  .tree-item { display: flex; align-items: center; gap: 8px; padding: 7px 14px 7px 30px; font-size: 12.5px; color: #344054; border-left: 3px solid transparent; box-sizing: border-box; }
+  .tree-item:hover { background: #F5F8FE; }
+  .tree-item.active { background: #E3EBFB; color: #175CD3; font-weight: 700; border-left-color: #175CD3; }
+  .tree-subgrp { font-size: 11px; font-weight: 700; color: #475467; padding: 12px 14px 4px 44px; }
+  .tree-subitem { padding-left: 44px; }
+
+  .field { border: 1px solid #D0D5DD; border-radius: 5px; background: #FFFFFF; padding: 0 11px; height: 36px; font-size: 13px; font-family: 'Public Sans', sans-serif; color: #1D2433; width: 100%; box-sizing: border-box; appearance: none; }
+  .field:focus { outline: none; border-color: #175CD3; box-shadow: 0 0 0 3px rgba(23,92,211,0.14); }
+  textarea.field { height: auto; min-height: 64px; padding: 8px 11px; resize: vertical; line-height: 1.5; }
+  select.field { cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
+  .lbl { font-size: 12px; font-weight: 600; color: #344054; display: block; margin-bottom: 5px; }
+  .req { color: #D92D20; }
+  .hint { font-size: 11px; color: #98A2B3; margin-top: 4px; }
+  .fld { display: flex; flex-direction: column; }
+
+  .eyebrow { display: flex; align-items: center; justify-content: space-between; padding-bottom: 11px; border-bottom: 2px solid #1D2433; margin-bottom: 18px; flex: none; }
+  .eyebrow-title { font-size: 11.5px; font-weight: 800; color: #1D2433; text-transform: uppercase; letter-spacing: 0.6px; display: flex; align-items: center; gap: 8px; }
+
+  .btn-ghost { height: 34px; padding: 0 16px; border: 1px solid #D0D5DD; border-radius: 7px; background: #FFFFFF; font-size: 12.5px; color: #344054; font-weight: 600; cursor: pointer; }
+  .btn-primary { height: 34px; padding: 0 16px; border: none; border-radius: 7px; background: #175CD3; color: #FFFFFF; font-size: 12.5px; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgba(23,92,211,0.35); }
+
+  .user-row { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 7px; }
+  .user-row:hover { background: #F5F8FE; }
+  .user-row.selected { background: #E3EBFB; }
+  .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: #EFF4FC; color: #175CD3; font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
+  .user-name { font-size: 13px; font-weight: 700; color: #1D2433; cursor: pointer; }
+  .user-name:hover { color: #175CD3; text-decoration: underline; }
+  .user-sub { font-size: 11.5px; color: #98A2B3; margin-top: 1px; }
+  .user-meta { font-size: 11.5px; color: #667085; width: 130px; flex: none; }
+  .user-badge { font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 10px; flex: none; }
+  .user-badge.active { color: #067647; background: #ECFDF3; border: 1px solid #ABEFC6; }
+  .user-badge.inactive { color: #98A2B3; background: #F2F4F7; }
+  .edit-btn { width: 28px; height: 28px; border: none; background: transparent; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #98A2B3; flex: none; }
+  .edit-btn:hover { background: #E4E7EC; color: #175CD3; }
+  .check-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #344054; font-weight: 600; }
+  .check-row input { width: 14px; height: 14px; accent-color: #175CD3; cursor: pointer; }
+  .radio-row { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #344054; font-weight: 600; }
+  .radio-row input { width: 14px; height: 14px; accent-color: #175CD3; cursor: pointer; }
+
+  .toggle-track { width: 36px; height: 20px; border-radius: 20px; background: #D0D5DD; position: relative; flex: none; cursor: pointer; transition: background 0.12s ease; }
+  .toggle-track.on { background: #175CD3; }
+  .toggle-thumb { width: 16px; height: 16px; border-radius: 50%; background: #FFFFFF; position: absolute; top: 2px; left: 2px; transition: left 0.12s ease; box-shadow: 0 1px 2px rgba(16,24,40,0.25); }
+  .toggle-thumb.on { left: 18px; }
+
+  .modal-section-lbl { font-size: 10.5px; font-weight: 800; color: #8A94A6; text-transform: uppercase; letter-spacing: 0.5px; padding-top: 4px; }
+
+  .list-header-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px 8px 10px; border-bottom: 1px solid #EDEFF2; margin-bottom: 2px; font-size: 10.5px; font-weight: 800; color: #8A94A6; text-transform: uppercase; letter-spacing: 0.5px; }
+  .columns-menu { position: absolute; top: 40px; right: 0; width: 190px; background: #FFFFFF; border: 1px solid #E4E7EC; border-radius: 8px; box-shadow: 0 8px 20px rgba(16,24,40,0.14); padding: 10px 12px; z-index: 20; }
+  .columns-menu-title { font-size: 10.5px; font-weight: 800; color: #8A94A6; text-transform: uppercase; letter-spacing: 0.5px; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid #EDEFF2; }
+  .columns-menu-item { padding: 5px 0; }
+
+  .app-nav { width: 260px; flex: none; background: #FFFFFF; border-right: 1px solid #D5DAE1; overflow: hidden; box-sizing: border-box; position: relative; transition: width 0.15s ease; display: flex; flex-direction: column; }
+  .app-nav.collapsed { width: 60px; }
+  .nav-toggle { position: absolute; top: 14px; right: -12px; width: 24px; height: 24px; border-radius: 50%; background: #FFFFFF; border: 1px solid #D5DAE1; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 5; box-shadow: 0 1px 2px rgba(16,24,40,0.1); }
+  .nav-rail-item { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px auto; cursor: pointer; color: #667085; }
+  .nav-rail-item.active { background: #E3EBFB; color: #175CD3; }
+  .nav-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .nav-scroll::-webkit-scrollbar { width: 6px; }
+  .nav-scroll::-webkit-scrollbar-track { background: transparent; }
+  .nav-scroll::-webkit-scrollbar-thumb { background: #D0D5DD; border-radius: 6px; }
+  .nav-scroll::-webkit-scrollbar-thumb:hover { background: #98A2B3; }
+
+  .panel-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .panel-scroll::-webkit-scrollbar { width: 6px; }
+  .panel-scroll::-webkit-scrollbar-track { background: transparent; }
+  .panel-scroll::-webkit-scrollbar-thumb { background: #D0D5DD; border-radius: 6px; }
+  .panel-scroll::-webkit-scrollbar-thumb:hover { background: #98A2B3; }
+
+</style>
+</head>
+<body>
+<div id="app-root"></div>
+<template id="app-template">
+<div style="width: 1360px; height: 820px; box-sizing: border-box; background: #F7F8FA; display: flex; flex-direction: column; position: relative;">
+
+  <!-- top header -->
+  <div style="height: 46px; flex: none; background: #14213D; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; box-sizing: border-box;">
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="#B7C0D4" stroke-width="1.8" stroke-linecap="round"></path></svg>
+      <div style="display: flex; align-items: center; gap: 7px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="8" rx="1.5" fill="#5B9BF0"></rect><rect x="13" y="3" width="8" height="8" rx="1.5" fill="#175CD3"></rect><rect x="3" y="13" width="8" height="8" rx="1.5" fill="#175CD3"></rect><rect x="13" y="13" width="8" height="8" rx="1.5" fill="#5B9BF0"></rect></svg>
+        <div style="font-size: 13px; font-weight: 700; color: #FFFFFF;">Meridian</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9z" stroke="#B7C0D4" stroke-width="1.6" stroke-linejoin="round"></path><path d="M13.7 21a2 2 0 01-3.4 0" stroke="#B7C0D4" stroke-width="1.6" stroke-linecap="round"></path></svg>
+      <div style="width: 24px; height: 24px; border-radius: 4px; background: #175CD3; color: #FFFFFF; font-weight: 700; font-size: 10.5px; display: flex; align-items: center; justify-content: center;">AD</div>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; display: flex; min-height: 0;">
+
+    <!-- APP NAVIGATOR -->
+    <div class="{{navClass}}">
+
+      <button class="nav-toggle" onClick="{{toggleNav}}" title="{{navToggleTitle}}">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" style="transform: {{chevronTransform}};"><path d="M15 6l-6 6 6 6" stroke="#667085" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      </button>
+
+      <sc-if value="{{navExpanded}}" hint-placeholder-val="{{true}}">
+        <div style="padding: 10px 12px; border-bottom: 1px solid #EDEFF2; flex: none;">
+          <input type="text" placeholder="Filter navigator" style="width: 100%; height: 28px; padding: 0 8px; border: 1px solid #D0D5DD; border-radius: 5px; font-size: 12px; color: #344054; box-sizing: border-box;">
+        </div>
+        <div class="nav-scroll">
+          <div style="padding: 4px 0;">
+
+            <div class="tree-grp">User</div>
+            <a href="MyIncidents.html" class="tree-item" style="text-decoration:none;">My Incidents</a>
+            <a href="CreateIncident.html" class="tree-item" style="text-decoration:none;">New Incident</a>
+            <div class="tree-item">Feedback Moderation</div>
+            <div class="tree-item">Approve Incident Records</div>
+
+            <div class="tree-grp">Manage Incidents</div>
+            <a href="Main.html" class="tree-item" style="text-decoration:none;">Incident List</a>
+            <a href="CreateIncident.html" class="tree-item" style="text-decoration:none;">New Incident for User</a>
+            <div class="tree-item">Work Order List</div>
+
+            <div class="tree-grp">Configuration</div>
+
+            <div class="tree-subgrp">Incident Masters</div>
+            <a href="CategoryConfig.html" class="tree-item tree-subitem" style="text-decoration:none;">Category</a>
+            <a href="ClassificationConfig.html" class="tree-item tree-subitem" style="text-decoration:none;">Classification</a>
+            <div class="tree-item tree-subitem">Incident Work Order Checklist</div>
+            <div class="tree-item tree-subitem">Checklist</div>
+            <div class="tree-item tree-subitem">Closure Code</div>
+            <div class="tree-item tree-subitem">Log Incident Page</div>
+            <div class="tree-item tree-subitem">End User Incident Details Page</div>
+            <div class="tree-item tree-subitem">Pending Reason</div>
+            <div class="tree-item tree-subitem">Resolution Code</div>
+
+            <div class="tree-subgrp">SLA Configurations</div>
+            <div class="tree-item tree-subitem">Impact</div>
+            <div class="tree-item tree-subitem">SLA Matrix By CI</div>
+            <div class="tree-item tree-subitem">Priority</div>
+            <div class="tree-item tree-subitem">Priority Matrix</div>
+            <div class="tree-item tree-subitem">Workgroup SLA Window</div>
+            <div class="tree-item tree-subitem">SLA Service Window</div>
+            <div class="tree-item tree-subitem">SLA Matrix</div>
+            <div class="tree-item tree-subitem">Urgency</div>
+
+            <div class="tree-subgrp">TFS</div>
+            <div class="tree-item tree-subitem">TFS Configuration</div>
+            <div class="tree-item tree-subitem">Work Item Field Configuration</div>
+            <div class="tree-item tree-subitem">Value to Value Mapping</div>
+            <div class="tree-item tree-subitem">Profile Mapping</div>
+            <div class="tree-item tree-subitem">TFS Profile Mapping</div>
+
+            <div class="tree-subgrp">Others</div>
+            <div class="tree-item tree-subitem">Cost Configuration</div>
+            <div class="tree-item tree-subitem">Feedback Configuration</div>
+            <div class="tree-item tree-subitem">ETR E-mail Notification</div>
+            <a href="StatusConfig.html" class="tree-item tree-subitem" style="text-decoration:none;">Status Configuration</a>
+            <a href="StatusTransitionMatrix.html" class="tree-item tree-subitem" style="text-decoration:none;">Status Transition Matrix</a>
+            <div class="tree-item tree-subitem">E-mail Notification</div>
+            <div class="tree-item tree-subitem">SMS Notification</div>
+            <div class="tree-item tree-subitem">Voice Call Notification</div>
+            <div class="tree-item tree-subitem">Information Ticker</div>
+            <div class="tree-item tree-subitem">Major Incident</div>
+            <div class="tree-item tree-subitem">Rule</div>
+            <div class="tree-item tree-subitem">User Type</div>
+            <div class="tree-item tree-subitem">Auto Work Order Configuration</div>
+            <div class="tree-item tree-subitem">Standard Operating Procedure (SOP)</div>
+            <div class="tree-item tree-subitem">Evaluator Configuration</div>
+            <div class="tree-item tree-subitem">Approver Group Configuration</div>
+            <div class="tree-item tree-subitem">Approval Configuration</div>
+
+            <div class="tree-subgrp">User Management</div>
+            <div class="tree-item tree-subitem active">Users</div>
+            <a href="CreateUser.html" class="tree-item tree-subitem" style="text-decoration:none;">Create New User</a>
+
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{navCollapsed}}" hint-placeholder-val="{{false}}">
+        <div class="nav-scroll" style="padding-top: 56px; display: flex; flex-direction: column; align-items: center;">
+          <div class="nav-rail-item" title="User">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="currentColor" stroke-width="1.6"></circle><path d="M5 20c1.2-4 4-6 7-6s5.8 2 7 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+          </div>
+          <div class="nav-rail-item" title="Manage Incidents">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 4h6a1 1 0 011 1v1H8V5a1 1 0 011-1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><rect x="5" y="6" width="14" height="15" rx="2" stroke="currentColor" stroke-width="1.6"></rect><path d="M8.5 12h7M8.5 16h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>
+          </div>
+          <div class="nav-rail-item active" title="Configuration">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="1.5"></path><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" stroke-width="1.3"></path></svg>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+
+    <!-- MAIN -->
+    <div style="flex-grow: 1; overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column; min-width: 0;">
+
+      <!-- page header -->
+      <div style="padding: 16px 28px; border-bottom: 1px solid #E4E7EC; background: #FFFFFF; flex: none;">
+        <div style="font-size: 11.5px; color: #98A2B3; margin-bottom: 6px;"><span>Configuration</span> <span style="color:#D0D5DD;">&gt;</span> <span>User Management</span> <span style="color:#D0D5DD;">&gt;</span> <span style="color:#344054; font-weight: 500;">Users</span></div>
+        <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+          <div>
+            <div style="font-weight: 800; font-size: 20px; color: #0F1626; letter-spacing: -0.2px;">Users</div>
+            <div style="font-size: 12.5px; color: #667085; margin-top: 3px;">View all created user accounts and edit their details.</div>
+          </div>
+          <a href="Main.html" class="btn-ghost" style="text-decoration:none; display:flex; align-items:center;">Close</a>
+        </div>
+      </div>
+
+      <div style="flex-grow: 1; overflow: hidden; padding: 22px 28px 24px 28px; box-sizing: border-box; display: flex; flex-direction: column; min-height: 0;">
+
+        <sc-if value="{{listOpen}}" hint-placeholder-val="{{true}}">
+          <div class="eyebrow" style="margin-bottom: 12px;">
+            <div class="eyebrow-title">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="7" r="3.2" stroke="#1D2433" stroke-width="1.7"></circle><path d="M3 20c1-3.6 3.4-5.4 6-5.4s5 1.8 6 5.4" stroke="#1D2433" stroke-width="1.7" stroke-linecap="round"></path><circle cx="18" cy="8" r="2.4" stroke="#1D2433" stroke-width="1.5"></circle><path d="M15.5 14.2c2.4.5 4 2.2 4.7 5" stroke="#1D2433" stroke-width="1.5" stroke-linecap="round"></path></svg>
+              Users ({{userCount}})
+            </div>
+            <a href="CreateUser.html" class="btn-primary" style="height: 30px; padding: 0 14px; display: flex; align-items: center; gap: 6px; text-decoration:none;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"></path></svg>
+              Add User
+            </a>
+          </div>
+
+          <!-- FILTER TOOLBAR: search + field-visibility (Columns) picker -->
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex: none;">
+            <div style="position: relative; flex: 1 1 auto; max-width: 360px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); pointer-events: none;"><circle cx="11" cy="11" r="7" stroke="#98A2B3" stroke-width="1.8"></circle><path d="M21 21l-4.3-4.3" stroke="#98A2B3" stroke-width="1.8" stroke-linecap="round"></path></svg>
+              <input class="field" style="padding-left: 30px;" type="text" placeholder="Search by name, username, email, department, role…" value="{{searchQuery}}" onChange="{{setSearchQuery}}">
+            </div>
+            <div style="flex: 1 1 auto;"></div>
+            <div style="position: relative;">
+              <button type="button" class="btn-ghost" onClick="{{toggleColumnsMenu}}" style="display: flex; align-items: center; gap: 6px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="6" height="16" rx="1.2" stroke="currentColor" stroke-width="1.6"></rect><rect x="13" y="4" width="8" height="16" rx="1.2" stroke="currentColor" stroke-width="1.6"></rect></svg>
+                Columns
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </button>
+              <sc-if value="{{showColumnsMenu}}" hint-placeholder-val="{{false}}">
+                <div class="columns-menu">
+                  <div class="columns-menu-title">Show fields in list</div>
+                  <label class="check-row columns-menu-item"><input type="checkbox" checked="{{colEmailOn}}" onChange="{{toggleColEmail}}">Email</label>
+                  <label class="check-row columns-menu-item"><input type="checkbox" checked="{{colDepartmentOn}}" onChange="{{toggleColDepartment}}">Department</label>
+                  <label class="check-row columns-menu-item"><input type="checkbox" checked="{{colRoleOn}}" onChange="{{toggleColRole}}">Role</label>
+                  <label class="check-row columns-menu-item"><input type="checkbox" checked="{{colUserTypeOn}}" onChange="{{toggleColUserType}}">User Type</label>
+                  <label class="check-row columns-menu-item"><input type="checkbox" checked="{{colLocationOn}}" onChange="{{toggleColLocation}}">Location</label>
+                  <label class="check-row columns-menu-item"><input type="checkbox" checked="{{colStatusOn}}" onChange="{{toggleColStatus}}">Status</label>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+
+          <div class="panel-scroll" style="border: 1px solid #E4E7EC; border-radius: 8px; background: #FFFFFF; padding: 8px;">
+
+            <div class="list-header-row">
+              <div style="width: 32px; flex: none;"></div>
+              <div style="flex: 1 1 auto; min-width: 0;">Name</div>
+              <sc-if value="{{colEmailOn}}" hint-placeholder-val="{{false}}"><div class="user-meta">Email</div></sc-if>
+              <sc-if value="{{colDepartmentOn}}" hint-placeholder-val="{{true}}"><div class="user-meta">Department</div></sc-if>
+              <sc-if value="{{colRoleOn}}" hint-placeholder-val="{{false}}"><div class="user-meta">Role</div></sc-if>
+              <sc-if value="{{colUserTypeOn}}" hint-placeholder-val="{{true}}"><div class="user-meta" style="width: 90px;">User Type</div></sc-if>
+              <sc-if value="{{colLocationOn}}" hint-placeholder-val="{{false}}"><div class="user-meta">Location</div></sc-if>
+              <sc-if value="{{colStatusOn}}" hint-placeholder-val="{{true}}"><div style="width: 70px; flex: none;">Status</div></sc-if>
+              <div style="width: 28px; flex: none;"></div>
+            </div>
+
+            <sc-for list="{{rows}}" as="row" hint-placeholder-count="6">
+              <div class="{{row.rowClass}}">
+                <div class="user-avatar">{{row.initials}}</div>
+                <div style="flex: 1 1 auto; min-width: 0;">
+                  <div class="user-name" onClick="{{row.onEdit}}">{{row.name}}</div>
+                  <div class="user-sub">{{row.username}}</div>
+                </div>
+                <sc-if value="{{colEmailOn}}" hint-placeholder-val="{{false}}"><div class="user-meta">{{row.email}}</div></sc-if>
+                <sc-if value="{{colDepartmentOn}}" hint-placeholder-val="{{true}}"><div class="user-meta">{{row.department}}</div></sc-if>
+                <sc-if value="{{colRoleOn}}" hint-placeholder-val="{{false}}"><div class="user-meta">{{row.role}}</div></sc-if>
+                <sc-if value="{{colUserTypeOn}}" hint-placeholder-val="{{true}}"><div class="user-meta" style="width: 90px;">{{row.userType}}</div></sc-if>
+                <sc-if value="{{colLocationOn}}" hint-placeholder-val="{{false}}"><div class="user-meta">{{row.location}}</div></sc-if>
+                <sc-if value="{{colStatusOn}}" hint-placeholder-val="{{true}}"><span class="{{row.statusBadgeClass}}" style="width: 70px; flex: none; text-align: center;">{{row.statusLabel}}</span></sc-if>
+                <button type="button" class="edit-btn" title="Edit user" onClick="{{row.onEdit}}">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path></svg>
+                </button>
+              </div>
+            </sc-for>
+
+            <sc-if value="{{noResults}}" hint-placeholder-val="{{false}}">
+              <div style="padding: 32px 12px; text-align: center; color: #98A2B3; font-size: 12.5px;">No users match “{{searchQuery}}”.</div>
+            </sc-if>
+
+          </div>
+        </sc-if>
+
+        <!-- INLINE EDIT USER VIEW: opens within the same page, shows the full field set matching Create New User -->
+        <sc-if value="{{formOpen}}" hint-placeholder-val="{{false}}">
+          <div class="eyebrow" style="margin-bottom: 12px;">
+            <div class="eyebrow-title">
+              <button type="button" onClick="{{cancelForm}}" style="width: 26px; height: 26px; border: none; background: transparent; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #1D2433; margin-right: 2px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </button>
+              Edit User <span style="color:#98A2B3; font-weight: 600; text-transform: none; letter-spacing: 0;">— {{formSubtitle}}</span>
+            </div>
+            <button type="button" class="btn-ghost" onClick="{{cancelForm}}">Back to Users</button>
+          </div>
+
+          <div class="panel-scroll" style="border: 1px solid #E4E7EC; border-radius: 8px; background: #FFFFFF; padding: 22px 26px; flex: 1 1 auto; min-height: 0;">
+          <div style="display: flex; gap: 36px; align-items: flex-start;">
+
+            <!-- LEFT COLUMN -->
+            <div style="flex: 1 1 58%; min-width: 0; display: flex; flex-direction: column; gap: 26px;">
+
+              <div>
+                <div class="eyebrow">
+                  <div class="eyebrow-title">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.4" stroke="#1D2433" stroke-width="1.7"></circle><path d="M5 20c1.2-4 4-6 7-6s5.8 2 7 6" stroke="#1D2433" stroke-width="1.7" stroke-linecap="round"></path></svg>
+                    User Information
+                  </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 18px;">
+                  <div style="display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); column-gap: 20px; row-gap: 18px;">
+                    <div class="fld"><label class="lbl">First Name <span class="req">*</span></label><input class="field" type="text" value="{{formFirstName}}" onChange="{{setFormFirstName}}"></div>
+                    <div class="fld"><label class="lbl">Last Name <span class="req">*</span></label><input class="field" type="text" value="{{formLastName}}" onChange="{{setFormLastName}}"></div>
+                  </div>
+                  <div class="fld"><label class="lbl">Display Name <span class="req">*</span></label><input class="field" type="text" value="{{formName}}" onChange="{{setFormName}}"></div>
+                  <div style="display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); column-gap: 20px; row-gap: 18px;">
+                    <div class="fld"><label class="lbl">Email ID <span class="req">*</span></label><input class="field" type="text" value="{{formEmail}}" onChange="{{setFormEmail}}"></div>
+                    <div class="fld"><label class="lbl">Phone Number</label><input class="field" type="text" value="{{formPhone}}" onChange="{{setFormPhone}}"></div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); column-gap: 20px; row-gap: 18px;">
+                    <div class="fld"><label class="lbl">Employee ID</label><input class="field" type="text" value="{{formEmployeeId}}" onChange="{{setFormEmployeeId}}"></div>
+                    <div class="fld"><label class="lbl">Job Title</label><input class="field" type="text" value="{{formJobTitle}}" onChange="{{setFormJobTitle}}"></div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); column-gap: 20px; row-gap: 18px;">
+                    <div class="fld"><label class="lbl">Department <span class="req">*</span></label>
+                      <select class="field" value="{{formDepartment}}" onChange="{{setFormDepartment}}">
+                        <sc-for list="{{departmentOptions}}" as="d" hint-placeholder-count="6"><option value="{{d}}">{{d}}</option></sc-for>
+                      </select>
+                    </div>
+                    <div class="fld"><label class="lbl">Manager</label>
+                      <select class="field" value="{{formManager}}" onChange="{{setFormManager}}">
+                        <sc-for list="{{managerOptions}}" as="m" hint-placeholder-count="3"><option value="{{m}}">{{m}}</option></sc-for>
+                      </select>
+                    </div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); column-gap: 20px; row-gap: 18px;">
+                    <div class="fld"><label class="lbl">Business Service</label>
+                      <select class="field" value="{{formBusinessService}}" onChange="{{setFormBusinessService}}">
+                        <sc-for list="{{serviceOptions}}" as="s" hint-placeholder-count="3"><option value="{{s}}">{{s}}</option></sc-for>
+                      </select>
+                    </div>
+                    <div class="fld"><label class="lbl">Location</label>
+                      <select class="field" value="{{formLocation}}" onChange="{{setFormLocation}}">
+                        <sc-for list="{{locationOptions}}" as="loc" hint-placeholder-count="4"><option value="{{loc}}">{{loc}}</option></sc-for>
+                      </select>
+                    </div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); column-gap: 20px; row-gap: 18px;">
+                    <div class="fld">
+                      <label class="lbl">User Type <span class="req">*</span></label>
+                      <div style="display: flex; align-items: center; gap: 16px; height: 36px;">
+                        <label class="radio-row"><input type="radio" checked="{{formTypeInternal}}" onChange="{{setTypeInternal}}">Internal</label>
+                        <label class="radio-row"><input type="radio" checked="{{formTypeExternal}}" onChange="{{setTypeExternal}}">External</label>
+                        <label class="radio-row"><input type="radio" checked="{{formTypePartner}}" onChange="{{setTypePartner}}">Partner</label>
+                      </div>
+                    </div>
+                    <div class="fld">
+                      <label class="lbl">User Status <span class="req">*</span></label>
+                      <div style="display: flex; align-items: center; height: 36px;">
+                        <label class="check-row"><input type="checkbox" checked="{{formIsActive}}" onChange="{{toggleFormActive}}">Active</label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div class="eyebrow">
+                  <div class="eyebrow-title">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 4h9l7 7v9H4V4z" stroke="#1D2433" stroke-width="1.8" stroke-linejoin="round"></path><path d="M8 12h6M8 16h4" stroke="#1D2433" stroke-width="1.6" stroke-linecap="round"></path></svg>
+                    Additional Information
+                  </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 18px;">
+                  <div class="fld"><label class="lbl">Notes</label><textarea class="field" onChange="{{setFormNotes}}" placeholder="Enter any additional notes about the user…">{{formNotes}}</textarea></div>
+                  <div style="display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); column-gap: 16px;">
+                    <div class="fld"><label class="lbl">Language</label>
+                      <select class="field" value="{{formLanguage}}" onChange="{{setFormLanguage}}">
+                        <sc-for list="{{languageOptions}}" as="l" hint-placeholder-count="3"><option value="{{l}}">{{l}}</option></sc-for>
+                      </select>
+                    </div>
+                    <div class="fld"><label class="lbl">Date Format</label>
+                      <select class="field" value="{{formDateFormat}}" onChange="{{setFormDateFormat}}">
+                        <sc-for list="{{dateFormatOptions}}" as="df" hint-placeholder-count="3"><option value="{{df}}">{{df}}</option></sc-for>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="fld"><label class="lbl">Time Zone</label>
+                    <select class="field" value="{{formTimeZone}}" onChange="{{setFormTimeZone}}">
+                      <sc-for list="{{timeZoneOptions}}" as="tz" hint-placeholder-count="3"><option value="{{tz}}">{{tz}}</option></sc-for>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- RIGHT COLUMN -->
+            <div style="flex: 1 1 42%; min-width: 0; display: flex; flex-direction: column; gap: 26px; border-left: 1px solid #E4E7EC; padding-left: 32px;">
+
+              <div>
+                <div class="eyebrow">
+                  <div class="eyebrow-title">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="4" y="10" width="16" height="10" rx="2" stroke="#1D2433" stroke-width="1.6"></rect><path d="M8 10V7a4 4 0 018 0v3" stroke="#1D2433" stroke-width="1.6"></path></svg>
+                    Account Information
+                  </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 18px;">
+                  <div class="fld"><label class="lbl">Username <span class="req">*</span></label><input class="field" type="text" value="{{formUsername}}" onChange="{{setFormUsername}}"></div>
+                  <div class="fld">
+                    <label class="lbl">Authentication Type</label>
+                    <select class="field" value="{{formAuthType}}" onChange="{{setFormAuthType}}">
+                      <sc-for list="{{authTypeOptions}}" as="a" hint-placeholder-count="3"><option value="{{a}}">{{a}}</option></sc-for>
+                    </select>
+                  </div>
+                  <div class="fld">
+                    <label class="lbl">Single Sign-On (SSO)</label>
+                    <div style="display: flex; align-items: center; gap: 8px; height: 36px;">
+                      <div class="{{ssoTrackClass}}" onClick="{{toggleSso}}"><div class="{{ssoThumbClass}}"></div></div>
+                      <span style="font-size: 12.5px; color: #344054; font-weight: 600;">{{ssoLabel}}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div class="eyebrow">
+                  <div class="eyebrow-title">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 6" stroke="#1D2433" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                    Role &amp; Access
+                  </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 18px;">
+                  <div class="fld"><label class="lbl">Role</label>
+                    <select class="field" value="{{formRole}}" onChange="{{setFormRole}}">
+                      <sc-for list="{{roleOptions}}" as="rl" hint-placeholder-count="3"><option value="{{rl}}">{{rl}}</option></sc-for>
+                    </select>
+                  </div>
+                  <div class="fld"><label class="lbl">Assignment Group</label>
+                    <select class="field" value="{{formAssignmentGroup}}" onChange="{{setFormAssignmentGroup}}">
+                      <sc-for list="{{assignmentGroupOptions}}" as="g" hint-placeholder-count="3"><option value="{{g}}">{{g}}</option></sc-for>
+                    </select>
+                  </div>
+                  <div class="fld"><label class="lbl">Default Landing Page</label>
+                    <select class="field" value="{{formLandingPage}}" onChange="{{setFormLandingPage}}">
+                      <sc-for list="{{landingPageOptions}}" as="p" hint-placeholder-count="3"><option value="{{p}}">{{p}}</option></sc-for>
+                    </select>
+                  </div>
+                  <div style="display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); row-gap: 12px; column-gap: 16px;">
+                    <label class="check-row"><input type="checkbox" checked="{{formMobileAccess}}" onChange="{{toggleMobileAccess}}">Allow Mobile Access</label>
+                    <label class="check-row"><input type="checkbox" checked="{{formApiAccess}}" onChange="{{toggleApiAccess}}">Allow API Access</label>
+                    <label class="check-row"><input type="checkbox" checked="{{formAllowLogin}}" onChange="{{toggleAllowLogin}}">Allow Login</label>
+                    <label class="check-row"><input type="checkbox" checked="{{formReviewRequired}}" onChange="{{toggleReviewRequired}}">Review Required</label>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 10px; padding: 14px 2px 0 2px; flex: none;">
+            <button type="button" class="btn-primary" onClick="{{saveForm}}">Save Changes</button>
+            <button type="button" class="btn-ghost" onClick="{{cancelForm}}">Cancel</button>
+          </div>
+        </sc-if>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+</template>
+<script src="dc-mini-runtime.js"></script>
+<script>
+
+const DEPARTMENTS = ['IT Support', 'Network Operations', 'Service Desk', 'Facilities', 'Human Resources', 'Finance & Accounts'];
+const MANAGERS = ['Priya Nair', 'Arjun Mehta', 'Rohan Kulkarni'];
+const SERVICES = ['IT Support — L1', 'Network Operations', 'Facilities'];
+const LOCATIONS = ['Mumbai', 'Bengaluru', 'Delhi NCR', 'Remote'];
+const ROLES = ['Agent', 'Approver', 'Admin'];
+const ASSIGNMENT_GROUPS = ['IT Support — L1', 'Network Operations', 'Service Desk'];
+const LANDING_PAGES = ['My Dashboard', 'My Incidents', 'Incident List'];
+const AUTH_TYPES = ['Internal', 'LDAP', 'SAML'];
+const LANGUAGES = ['English (US)', 'English (UK)', 'Hindi'];
+const DATE_FORMATS = ['DD MMM YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'];
+const TIME_ZONES = ['(GMT+05:30) Asia/Kolkata', '(GMT+00:00) UTC', '(GMT-05:00) US Eastern'];
+
+function mkUser(id, name, overrides) {
+  const parts = name.trim().split(/\s+/);
+  const base = {
+    id: id,
+    name: name,
+    firstName: parts[0] || '',
+    lastName: parts.slice(1).join(' ') || '',
+    username: '',
+    email: '',
+    phone: '',
+    employeeId: '',
+    jobTitle: '',
+    department: DEPARTMENTS[0],
+    manager: MANAGERS[0],
+    businessService: SERVICES[0],
+    location: LOCATIONS[0],
+    userType: 'Internal',
+    active: true,
+    authType: AUTH_TYPES[0],
+    sso: false,
+    role: ROLES[0],
+    assignmentGroup: ASSIGNMENT_GROUPS[0],
+    landingPage: LANDING_PAGES[0],
+    mobileAccess: true,
+    apiAccess: false,
+    allowLogin: true,
+    reviewRequired: false,
+    language: LANGUAGES[0],
+    notes: '',
+    dateFormat: DATE_FORMATS[0],
+    timeZone: TIME_ZONES[0]
+  };
+  return Object.assign(base, overrides || {});
+}
+
+function resetFormFields() {
+  return {
+    formFirstName: '',
+    formLastName: '',
+    formName: '',
+    formEmail: '',
+    formPhone: '',
+    formEmployeeId: '',
+    formJobTitle: '',
+    formDepartment: DEPARTMENTS[0],
+    formManager: MANAGERS[0],
+    formBusinessService: SERVICES[0],
+    formLocation: LOCATIONS[0],
+    formUserType: 'Internal',
+    formActive: true,
+    formUsername: '',
+    formAuthType: AUTH_TYPES[0],
+    formSso: false,
+    formRole: ROLES[0],
+    formAssignmentGroup: ASSIGNMENT_GROUPS[0],
+    formLandingPage: LANDING_PAGES[0],
+    formMobileAccess: true,
+    formApiAccess: false,
+    formAllowLogin: true,
+    formReviewRequired: false,
+    formLanguage: LANGUAGES[0],
+    formNotes: '',
+    formDateFormat: DATE_FORMATS[0],
+    formTimeZone: TIME_ZONES[0]
+  };
+}
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = Object.assign({
+      navCollapsed: false,
+      users: [
+        mkUser('u1', 'Ananya Iyer', { username: 'ananya.iyer', email: 'ananya.iyer@company.com', department: 'IT Support', role: 'Agent', userType: 'Internal', active: true, jobTitle: 'IT Support Specialist', location: 'Mumbai' }),
+        mkUser('u2', 'Priya Nair', { username: 'priya.nair', email: 'priya.nair@company.com', department: 'Network Operations', role: 'Approver', userType: 'Internal', active: true, jobTitle: 'Network Engineer', location: 'Bengaluru' }),
+        mkUser('u3', 'Rahul Mehta', { username: 'rahul.mehta', email: 'rahul.mehta@company.com', department: 'IT Support', role: 'Agent', userType: 'Internal', active: true, jobTitle: 'Hardware Technician', location: 'Mumbai' }),
+        mkUser('u4', 'Karan Shah', { username: 'karan.shah', email: 'karan.shah@company.com', department: 'IT Support', role: 'Agent', userType: 'Internal', active: false, jobTitle: 'Hardware Technician', location: 'Delhi NCR' }),
+        mkUser('u5', 'Neha Joshi', { username: 'neha.joshi', email: 'neha.joshi@company.com', department: 'Service Desk', role: 'Admin', userType: 'Internal', active: true, jobTitle: 'Service Desk Lead', location: 'Mumbai' }),
+        mkUser('u6', 'Vikram Rao', { username: 'vikram.rao', email: 'vikram.rao@partner.com', department: 'Facilities', role: 'Agent', userType: 'Partner', active: true, jobTitle: 'Facilities Contractor', location: 'Remote' })
+      ],
+      formEditId: null,
+      searchQuery: '',
+      showColumnsMenu: false,
+      colEmail: false,
+      colDepartment: true,
+      colRole: false,
+      colUserType: true,
+      colLocation: false,
+      colStatus: true
+    }, resetFormFields());
+  }
+
+  toggleNav() {
+    this.setState({ navCollapsed: !this.state.navCollapsed });
+  }
+
+  setSearchQuery(e) { this.setState({ searchQuery: e.target.value }); }
+  toggleColumnsMenu() { this.setState({ showColumnsMenu: !this.state.showColumnsMenu }); }
+  toggleColEmail(e) { this.setState({ colEmail: e.target.checked }); }
+  toggleColDepartment(e) { this.setState({ colDepartment: e.target.checked }); }
+  toggleColRole(e) { this.setState({ colRole: e.target.checked }); }
+  toggleColUserType(e) { this.setState({ colUserType: e.target.checked }); }
+  toggleColLocation(e) { this.setState({ colLocation: e.target.checked }); }
+  toggleColStatus(e) { this.setState({ colStatus: e.target.checked }); }
+
+  initials(name) {
+    const parts = name.trim().split(/\s+/);
+    const first = parts[0] ? parts[0][0] : '';
+    const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
+    return (first + last).toUpperCase();
+  }
+
+  openEdit(id) {
+    const user = this.state.users.find((u) => u.id === id);
+    if (!user) return;
+    this.setState(Object.assign({
+      formEditId: id,
+      formFirstName: user.firstName,
+      formLastName: user.lastName,
+      formName: user.name,
+      formEmail: user.email,
+      formPhone: user.phone,
+      formEmployeeId: user.employeeId,
+      formJobTitle: user.jobTitle,
+      formDepartment: user.department,
+      formManager: user.manager,
+      formBusinessService: user.businessService,
+      formLocation: user.location,
+      formUserType: user.userType,
+      formActive: user.active !== false,
+      formUsername: user.username,
+      formAuthType: user.authType,
+      formSso: !!user.sso,
+      formRole: user.role,
+      formAssignmentGroup: user.assignmentGroup,
+      formLandingPage: user.landingPage,
+      formMobileAccess: !!user.mobileAccess,
+      formApiAccess: !!user.apiAccess,
+      formAllowLogin: !!user.allowLogin,
+      formReviewRequired: !!user.reviewRequired,
+      formLanguage: user.language,
+      formNotes: user.notes,
+      formDateFormat: user.dateFormat,
+      formTimeZone: user.timeZone
+    }));
+  }
+
+  setFormFirstName(e) { this.setState({ formFirstName: e.target.value }); }
+  setFormLastName(e) { this.setState({ formLastName: e.target.value }); }
+  setFormName(e) { this.setState({ formName: e.target.value }); }
+  setFormEmail(e) { this.setState({ formEmail: e.target.value }); }
+  setFormPhone(e) { this.setState({ formPhone: e.target.value }); }
+  setFormEmployeeId(e) { this.setState({ formEmployeeId: e.target.value }); }
+  setFormJobTitle(e) { this.setState({ formJobTitle: e.target.value }); }
+  setFormDepartment(e) { this.setState({ formDepartment: e.target.value }); }
+  setFormManager(e) { this.setState({ formManager: e.target.value }); }
+  setFormBusinessService(e) { this.setState({ formBusinessService: e.target.value }); }
+  setFormLocation(e) { this.setState({ formLocation: e.target.value }); }
+  setUserType(type) { this.setState({ formUserType: type }); }
+  toggleFormActive(e) { this.setState({ formActive: e.target.checked }); }
+  setFormUsername(e) { this.setState({ formUsername: e.target.value }); }
+  setFormAuthType(e) { this.setState({ formAuthType: e.target.value }); }
+  toggleSso() { this.setState({ formSso: !this.state.formSso }); }
+  setFormRole(e) { this.setState({ formRole: e.target.value }); }
+  setFormAssignmentGroup(e) { this.setState({ formAssignmentGroup: e.target.value }); }
+  setFormLandingPage(e) { this.setState({ formLandingPage: e.target.value }); }
+  toggleMobileAccess(e) { this.setState({ formMobileAccess: e.target.checked }); }
+  toggleApiAccess(e) { this.setState({ formApiAccess: e.target.checked }); }
+  toggleAllowLogin(e) { this.setState({ formAllowLogin: e.target.checked }); }
+  toggleReviewRequired(e) { this.setState({ formReviewRequired: e.target.checked }); }
+  setFormLanguage(e) { this.setState({ formLanguage: e.target.value }); }
+  setFormNotes(e) { this.setState({ formNotes: e.target.value }); }
+  setFormDateFormat(e) { this.setState({ formDateFormat: e.target.value }); }
+  setFormTimeZone(e) { this.setState({ formTimeZone: e.target.value }); }
+
+  cancelForm() {
+    this.setState(Object.assign({ formEditId: null }, resetFormFields()));
+  }
+
+  saveForm() {
+    const name = this.state.formName.trim();
+    const username = this.state.formUsername.trim();
+    if (!name || !username) return;
+    const patch = {
+      firstName: this.state.formFirstName.trim(),
+      lastName: this.state.formLastName.trim(),
+      name: name,
+      email: this.state.formEmail.trim(),
+      phone: this.state.formPhone.trim(),
+      employeeId: this.state.formEmployeeId.trim(),
+      jobTitle: this.state.formJobTitle.trim(),
+      department: this.state.formDepartment,
+      manager: this.state.formManager,
+      businessService: this.state.formBusinessService,
+      location: this.state.formLocation,
+      userType: this.state.formUserType,
+      active: this.state.formActive,
+      username: username,
+      authType: this.state.formAuthType,
+      sso: this.state.formSso,
+      role: this.state.formRole,
+      assignmentGroup: this.state.formAssignmentGroup,
+      landingPage: this.state.formLandingPage,
+      mobileAccess: this.state.formMobileAccess,
+      apiAccess: this.state.formApiAccess,
+      allowLogin: this.state.formAllowLogin,
+      reviewRequired: this.state.formReviewRequired,
+      language: this.state.formLanguage,
+      notes: this.state.formNotes,
+      dateFormat: this.state.formDateFormat,
+      timeZone: this.state.formTimeZone
+    };
+    const users = this.state.users.map((u) => (u.id === this.state.formEditId ? Object.assign({}, u, patch) : u));
+    this.setState(Object.assign({ users: users, formEditId: null }, resetFormFields()));
+  }
+
+  renderVals() {
+    const query = this.state.searchQuery.trim().toLowerCase();
+    const filteredUsers = !query ? this.state.users : this.state.users.filter((u) => {
+      const haystack = [u.name, u.username, u.email, u.department, u.role, u.userType, u.location, u.jobTitle].join(' ').toLowerCase();
+      return haystack.indexOf(query) !== -1;
+    });
+
+    const rows = filteredUsers.map((u) => ({
+      key: u.id,
+      initials: this.initials(u.name),
+      name: u.name,
+      username: u.username,
+      email: u.email,
+      department: u.department,
+      role: u.role,
+      location: u.location,
+      userType: u.userType,
+      statusLabel: u.active !== false ? 'Active' : 'Inactive',
+      statusBadgeClass: u.active !== false ? 'user-badge active' : 'user-badge inactive',
+      rowClass: this.state.formEditId === u.id ? 'user-row selected' : 'user-row',
+      onEdit: () => this.openEdit(u.id)
+    }));
+
+    return {
+      navClass: this.state.navCollapsed ? 'app-nav collapsed' : 'app-nav',
+      navExpanded: !this.state.navCollapsed,
+      navCollapsed: this.state.navCollapsed,
+      navToggleTitle: this.state.navCollapsed ? 'Expand navigator' : 'Collapse navigator',
+      chevronTransform: this.state.navCollapsed ? 'rotate(180deg)' : 'none',
+      toggleNav: () => this.toggleNav(),
+      userCount: this.state.users.length,
+      rows,
+      noResults: rows.length === 0,
+      searchQuery: this.state.searchQuery,
+      setSearchQuery: (e) => this.setSearchQuery(e),
+      showColumnsMenu: this.state.showColumnsMenu,
+      toggleColumnsMenu: () => this.toggleColumnsMenu(),
+      colEmailOn: this.state.colEmail,
+      toggleColEmail: (e) => this.toggleColEmail(e),
+      colDepartmentOn: this.state.colDepartment,
+      toggleColDepartment: (e) => this.toggleColDepartment(e),
+      colRoleOn: this.state.colRole,
+      toggleColRole: (e) => this.toggleColRole(e),
+      colUserTypeOn: this.state.colUserType,
+      toggleColUserType: (e) => this.toggleColUserType(e),
+      colLocationOn: this.state.colLocation,
+      toggleColLocation: (e) => this.toggleColLocation(e),
+      colStatusOn: this.state.colStatus,
+      toggleColStatus: (e) => this.toggleColStatus(e),
+      formOpen: !!this.state.formEditId,
+      listOpen: !this.state.formEditId,
+      formSubtitle: this.state.formUsername ? '@' + this.state.formUsername : 'Update this user’s details, role and access.',
+
+      formFirstName: this.state.formFirstName,
+      setFormFirstName: (e) => this.setFormFirstName(e),
+      formLastName: this.state.formLastName,
+      setFormLastName: (e) => this.setFormLastName(e),
+      formName: this.state.formName,
+      setFormName: (e) => this.setFormName(e),
+      formEmail: this.state.formEmail,
+      setFormEmail: (e) => this.setFormEmail(e),
+      formPhone: this.state.formPhone,
+      setFormPhone: (e) => this.setFormPhone(e),
+      formEmployeeId: this.state.formEmployeeId,
+      setFormEmployeeId: (e) => this.setFormEmployeeId(e),
+      formJobTitle: this.state.formJobTitle,
+      setFormJobTitle: (e) => this.setFormJobTitle(e),
+
+      formDepartment: this.state.formDepartment,
+      setFormDepartment: (e) => this.setFormDepartment(e),
+      departmentOptions: DEPARTMENTS,
+      formManager: this.state.formManager,
+      setFormManager: (e) => this.setFormManager(e),
+      managerOptions: MANAGERS,
+      formBusinessService: this.state.formBusinessService,
+      setFormBusinessService: (e) => this.setFormBusinessService(e),
+      serviceOptions: SERVICES,
+      formLocation: this.state.formLocation,
+      setFormLocation: (e) => this.setFormLocation(e),
+      locationOptions: LOCATIONS,
+
+      formTypeInternal: this.state.formUserType === 'Internal',
+      formTypeExternal: this.state.formUserType === 'External',
+      formTypePartner: this.state.formUserType === 'Partner',
+      setTypeInternal: () => this.setUserType('Internal'),
+      setTypeExternal: () => this.setUserType('External'),
+      setTypePartner: () => this.setUserType('Partner'),
+      formIsActive: this.state.formActive,
+      toggleFormActive: (e) => this.toggleFormActive(e),
+
+      formUsername: this.state.formUsername,
+      setFormUsername: (e) => this.setFormUsername(e),
+      formAuthType: this.state.formAuthType,
+      setFormAuthType: (e) => this.setFormAuthType(e),
+      authTypeOptions: AUTH_TYPES,
+      ssoTrackClass: this.state.formSso ? 'toggle-track on' : 'toggle-track',
+      ssoThumbClass: this.state.formSso ? 'toggle-thumb on' : 'toggle-thumb',
+      ssoLabel: this.state.formSso ? 'Enabled' : 'Disabled',
+      toggleSso: () => this.toggleSso(),
+
+      formRole: this.state.formRole,
+      setFormRole: (e) => this.setFormRole(e),
+      roleOptions: ROLES,
+      formAssignmentGroup: this.state.formAssignmentGroup,
+      setFormAssignmentGroup: (e) => this.setFormAssignmentGroup(e),
+      assignmentGroupOptions: ASSIGNMENT_GROUPS,
+      formLandingPage: this.state.formLandingPage,
+      setFormLandingPage: (e) => this.setFormLandingPage(e),
+      landingPageOptions: LANDING_PAGES,
+      formMobileAccess: this.state.formMobileAccess,
+      toggleMobileAccess: (e) => this.toggleMobileAccess(e),
+      formApiAccess: this.state.formApiAccess,
+      toggleApiAccess: (e) => this.toggleApiAccess(e),
+      formAllowLogin: this.state.formAllowLogin,
+      toggleAllowLogin: (e) => this.toggleAllowLogin(e),
+      formReviewRequired: this.state.formReviewRequired,
+      toggleReviewRequired: (e) => this.toggleReviewRequired(e),
+
+      formLanguage: this.state.formLanguage,
+      setFormLanguage: (e) => this.setFormLanguage(e),
+      languageOptions: LANGUAGES,
+      formNotes: this.state.formNotes,
+      setFormNotes: (e) => this.setFormNotes(e),
+      formDateFormat: this.state.formDateFormat,
+      setFormDateFormat: (e) => this.setFormDateFormat(e),
+      dateFormatOptions: DATE_FORMATS,
+      formTimeZone: this.state.formTimeZone,
+      setFormTimeZone: (e) => this.setFormTimeZone(e),
+      timeZoneOptions: TIME_ZONES,
+
+      saveForm: () => this.saveForm(),
+      cancelForm: () => this.cancelForm()
+    };
+  }
+}
+
+
+dcBoot(Component, 'app-root', 'app-template');
+</script>
+</body>
+</html>

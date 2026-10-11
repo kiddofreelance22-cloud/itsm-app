@@ -3,9 +3,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useToast } from "./use-toast";
 import {
   StatusApi, PriorityApi, ImpactApi, UrgencyApi,
-  SubCategoryApi, AssignmentGroupApi, LocationApi,
+  SubCategoryApi, AssignmentGroupApi, LocationApi, ServiceCategoryApi, ServiceImpactApi, ServiceCompletionApi, ClosureCodeApi, PendingReasonApi, PriorityMatrixApi, SlaServiceWindowApi,
 } from "@/lib/api/admin-modules.api";
-import { Status, Priority, Impact, Urgency, SubCategory, AssignmentGroup, Location } from "@/types/admin";
+import { Status, Priority, Impact, Urgency, SubCategory, AssignmentGroup, Location, ServiceCategory, ServiceImpact, ServiceCompletion, ClosureCode, PendingReason, PriorityMatrix, SlaServiceWindow } from "@/types/admin";
 
 type AdminPayload = Record<string, unknown>;
 type AdminApi<T> = {
@@ -56,6 +56,10 @@ function makeHook<T>(api: AdminApi<T>) {
       catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Unknown error";
         toast({ title: "Error", description: message, variant: "error" });
+        // Reconcile with the server even on failure — a delete that actually
+        // succeeded (e.g. a stale duplicate request 404ing) shouldn't leave a
+        // deleted row still showing in the list next to the error toast.
+        await fetch();
         return false;
       }
     }, [api, fetch, toast]);
@@ -71,3 +75,10 @@ export const useAdminUrgency = makeHook<Urgency>(UrgencyApi);
 export const useAdminSubCategory = makeHook<SubCategory>(SubCategoryApi);
 export const useAdminAssignmentGroup = makeHook<AssignmentGroup>(AssignmentGroupApi);
 export const useAdminLocation = makeHook<Location>(LocationApi);
+export const useAdminServiceCategory = makeHook<ServiceCategory>(ServiceCategoryApi);
+export const useAdminServiceImpact = makeHook<ServiceImpact>(ServiceImpactApi);
+export const useAdminServiceCompletion = makeHook<ServiceCompletion>(ServiceCompletionApi);
+export const useAdminClosureCode = makeHook<ClosureCode>(ClosureCodeApi);
+export const useAdminPendingReason = makeHook<PendingReason>(PendingReasonApi);
+export const useAdminPriorityMatrix = makeHook<PriorityMatrix>(PriorityMatrixApi);
+export const useAdminSlaServiceWindow = makeHook<SlaServiceWindow>(SlaServiceWindowApi);

@@ -58,10 +58,34 @@ export class Incident {
   @Column({ name: "sla_response_target", nullable: true, type: "timestamp" }) slaResponseTarget?: Date;
   @Column({ name: "sla_resolution_target", nullable: true, type: "timestamp" }) slaResolutionTarget?: Date;
   @Column({ name: "sla_response_met", default: false }) slaResponseMet!: boolean;
+  @Column({ name: "sla_service_window_id", type: "int", nullable: true }) slaServiceWindowId?: number | null;
   @Column({ name: "sla_breached", default: false }) slaBreached!: boolean;
+
+  @Column({ name: "resolution_notes", type: "text", nullable: true }) resolutionNotes?: string;
+  @Column({ name: "closure_code", nullable: true }) closureCode?: string;
+  @Column({ name: "resolution_code", type: "varchar", nullable: true }) resolutionCode?: string | null;
+  @Column({ name: "feedback_rating", type: "integer", nullable: true }) feedbackRating?: number;
+  @Column({ name: "feedback_comment", type: "text", nullable: true }) feedbackComment?: string;
 
   @CreateDateColumn({ name: "created_at" }) createdAt!: Date;
   @UpdateDateColumn({ name: "updated_at" }) updatedAt!: Date;
   @Column({ name: "resolved_at", nullable: true, type: "timestamp" }) resolvedAt?: Date;
+  @Column({ name: "closed_at", nullable: true, type: "timestamp" }) closedAt?: Date;
   @Column({ name: "claimed_at", nullable: true, type: "timestamp" }) claimedAt?: Date;
+
+  // ── Added by 1792000000000-ItsmConfigurationSuite ──────────────────────────
+  @Column({ name: "sla_warning_sent", default: false }) slaWarningSent!: boolean;
+  @Column({ name: "contact_type", type: "varchar", nullable: true }) contactType?: string | null;
+  @Column({ name: "caller_email", type: "varchar", nullable: true }) callerEmail?: string | null;
+  @Column({ name: "logged_by", type: "int", nullable: true }) loggedBy?: number | null;
+  @Column({ name: "classification_id", type: "int", nullable: true }) classificationId?: number | null;
+  @Column({ name: "pending_reason", type: "varchar", nullable: true }) pendingReason?: string | null;
+  @Column({ name: "on_hold_reason", type: "varchar", nullable: true }) onHoldReason?: string | null;
+  @Column({ name: "sla_paused_at", type: "timestamp", nullable: true }) slaPausedAt?: Date | null;
+  @Column({ name: "feedback_submitted_at", type: "timestamp", nullable: true }) feedbackSubmittedAt?: Date | null;
+  @Column({ name: "feedback_published", default: false }) feedbackPublished!: boolean;
+  @Column({ name: "feedback_flagged", default: false }) feedbackFlagged!: boolean;
+  @Column({ name: "feedback_moderator_note", type: "text", nullable: true }) feedbackModeratorNote?: string | null;
+  @Column({ name: "feedback_moderated_by", type: "int", nullable: true }) feedbackModeratedBy?: number | null;
+  @Column({ name: "feedback_moderated_at", type: "timestamp", nullable: true }) feedbackModeratedAt?: Date | null;
 }

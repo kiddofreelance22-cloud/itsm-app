@@ -156,11 +156,11 @@ export function VariableBuilder({
             {expandedId === v.variableId && NEEDS_OPTIONS.includes(v.fieldType) && (
               <div className="px-4 pb-3 pt-1 border-t">
                 <p className="text-xs text-gray-500 mb-2">Options:</p>
-                {v.options.length === 0 ? (
+                {(v.options ?? []).length === 0 ? (
                   <p className="text-xs text-gray-400">No options defined.</p>
                 ) : (
                   <div className="flex flex-wrap gap-1">
-                    {v.options.map((o) => (
+                    {(v.options ?? []).map((o) => (
                       <span
                         key={o.optionId}
                         className="text-xs bg-gray-100 text-gray-700 rounded px-2 py-0.5"

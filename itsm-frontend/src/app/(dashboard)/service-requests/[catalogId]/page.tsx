@@ -104,7 +104,7 @@ export default function CatalogRequestPage() {
             <p className="text-sm text-slate-500 mt-0.5">{catalog.shortDescription}</p>
           )}
           <span className="mt-1 inline-block text-xs bg-slate-100 text-slate-600 rounded-full px-2 py-0.5">
-            {catalog.category?.categoryName ?? "Uncategorized"}
+            {catalog.serviceCategory?.categoryName ?? catalog.category?.categoryName ?? "Uncategorized"}
           </span>
         </div>
       </div>

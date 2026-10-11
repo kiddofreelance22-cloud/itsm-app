@@ -2,12 +2,12 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import {
   AlertCircle,
   Building2,
   CheckCircle2,
   ChevronDown,
-  ChevronRight,
   ChevronUp,
   Clock,
   Download,
@@ -34,13 +34,16 @@ import {
   XCircle,
 } from "lucide-react";
 import { IncidentsApi, type Incident, type IncidentActivity } from "@/lib/api/incidents.api";
+import { Breadcrumb } from "@/components/layout/breadcrumb";
 import { useAuth } from "@/lib/hooks/use-auth";
 import { useIncidentActivities } from "@/lib/hooks/use-incidents";
 import { useToast } from "@/lib/hooks/use-toast";
 import { ResolveIncidentModal, type ResolvePayload } from "@/components/incidents/resolve-incident-modal";
 import { useAdminAssignmentGroup } from "@/lib/hooks/use-admin-modules";
 import { apiFetch } from "@/lib/api/client";
-import { Status as AdminStatus, Priority as AdminPriority } from "@/types/admin";
+import { Status as AdminStatus, Priority as AdminPriority, Category as AdminCategory, SubCategory as AdminSubCategory, Impact as AdminImpact, Urgency as AdminUrgency, Location as AdminLocation } from "@/types/admin";
+import { CategoriesApi } from "@/lib/api/categories.api";
+import { SubCategoryApi, ImpactApi, UrgencyApi, LocationApi } from "@/lib/api/admin-modules.api";
 
 const STATUS_BADGE: Record<string, string> = {
   Open: "bg-blue-50 text-blue-700 ring-blue-200",
@@ -88,13 +91,17 @@ function StatusBadge({ s }: { s: string }): React.JSX.Element {
 }
 
 function Field({ icon: Icon, label, value }: { icon?: React.ElementType; label: string; value: React.ReactNode }): React.JSX.Element {
+  // Don't render field if value is empty/undefined/null
+  if (value === null || value === undefined || value === "" || value === "—") {
+    return <></>;
+  }
   return (
     <div>
       <p className="mb-1.5 flex items-center gap-1.5 text-xs text-slate-400">
         {Icon ? <Icon className="size-3.5" /> : null}
         {label}
       </p>
-      <p className="text-sm font-medium text-slate-700">{value ?? "—"}</p>
+      <p className="text-sm font-medium text-slate-700">{value}</p>
     </div>
   );
 }
@@ -110,20 +117,12 @@ function DotField({ color, label, value }: { color: string; label: string; value
   );
 }
 
-function Breadcrumb({ incidentCode }: { incidentCode?: string }): React.JSX.Element {
-  return (
-    <div className="flex items-center gap-1.5 text-sm text-slate-500">
-      <span className="cursor-pointer hover:text-blue-600">Home</span>
-      <ChevronRight className="size-3.5 text-slate-300" />
-      <span className="cursor-pointer hover:text-blue-600">My Incidents</span>
-      <ChevronRight className="size-3.5 text-slate-300" />
-      <span className="font-medium text-slate-700">{incidentCode ?? "INC-XXXX"}</span>
-    </div>
-  );
-}
-
-
-type IncidentForm = { status: string; priority: string; description: string; assignedTo: number | "" };
+type IncidentForm = {
+  status: string; priority: string; description: string; assignedTo: number | "";
+  impact: string; urgency: string;
+  categoryId: number | ""; subCategoryId: number | ""; groupId: number | ""; locationId: number | "";
+  affectedAsset: string; businessService: string; contactNumber: string; department: string;
+};
 
 function IncidentDetailsCard({
   incident,
@@ -137,6 +136,13 @@ function IncidentDetailsCard({
   groupMembers = [],
   statusOptions,
   priorityOptions,
+  descriptionLocked = false,
+  categories = [],
+  subCategories = [],
+  impactOptions = [],
+  urgencyOptions = [],
+  assignmentGroups = [],
+  locationOptions = [],
 }: {
   incident: Incident;
   editing: boolean;
@@ -149,8 +155,19 @@ function IncidentDetailsCard({
   groupMembers?: { userId: number; fullName: string }[];
   statusOptions: string[];
   priorityOptions: string[];
+  /** Engineers can edit every other field, but Description stays read-only. */
+  descriptionLocked?: boolean;
+  categories?: AdminCategory[];
+  subCategories?: AdminSubCategory[];
+  impactOptions?: string[];
+  urgencyOptions?: string[];
+  assignmentGroups?: { groupId: number; groupName: string }[];
+  locationOptions?: { locationId: number; locationName: string }[];
 }): React.JSX.Element {
     const [open, setOpen] = useState(true);
+    const filteredSubCategories = subCategories.filter(
+      (s) => form.categoryId === "" || s.category?.categoryId === form.categoryId
+    );
 
     return (
       <section className="rounded-2xl border border-slate-200 bg-white">
@@ -191,6 +208,136 @@ function IncidentDetailsCard({
                     ))}
                   </select>
                 </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-500">Impact</label>
+                  <select
+                    value={form.impact}
+                    onChange={(e) => setForm((prev) => ({ ...prev, impact: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">—</option>
+                    {impactOptions.map((i) => (
+                      <option key={i} value={i}>{i}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-500">Urgency</label>
+                  <select
+                    value={form.urgency}
+                    onChange={(e) => setForm((prev) => ({ ...prev, urgency: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">—</option>
+                    {urgencyOptions.map((u) => (
+                      <option key={u} value={u}>{u}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-500">Category</label>
+                  <select
+                    value={form.categoryId}
+                    onChange={(e) => setForm((prev) => ({
+                      ...prev,
+                      categoryId: e.target.value === "" ? "" : Number(e.target.value),
+                      subCategoryId: "",
+                    }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">—</option>
+                    {categories.map((c) => (
+                      <option key={c.categoryId} value={c.categoryId}>{c.categoryName}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {filteredSubCategories.length > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-500">Sub Category</label>
+                    <select
+                      value={form.subCategoryId}
+                      onChange={(e) => setForm((prev) => ({ ...prev, subCategoryId: e.target.value === "" ? "" : Number(e.target.value) }))}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    >
+                      <option value="">—</option>
+                      {filteredSubCategories.map((s) => (
+                        <option key={s.subCategoryId} value={s.subCategoryId}>{s.subCategoryName}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-500">Assignment Group</label>
+                  <select
+                    value={form.groupId}
+                    onChange={(e) => setForm((prev) => ({ ...prev, groupId: e.target.value === "" ? "" : Number(e.target.value) }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">Unassigned</option>
+                    {assignmentGroups.map((g) => (
+                      <option key={g.groupId} value={g.groupId}>{g.groupName}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-500">Location</label>
+                  <select
+                    value={form.locationId}
+                    onChange={(e) => setForm((prev) => ({ ...prev, locationId: e.target.value === "" ? "" : Number(e.target.value) }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">—</option>
+                    {locationOptions.map((l) => (
+                      <option key={l.locationId} value={l.locationId}>{l.locationName}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-500">Affected Asset</label>
+                  <input
+                    type="text"
+                    value={form.affectedAsset}
+                    onChange={(e) => setForm((prev) => ({ ...prev, affectedAsset: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-500">Contact Number</label>
+                  <input
+                    type="text"
+                    value={form.contactNumber}
+                    onChange={(e) => setForm((prev) => ({ ...prev, contactNumber: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-500">Department</label>
+                  <input
+                    type="text"
+                    value={form.department}
+                    onChange={(e) => setForm((prev) => ({ ...prev, department: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-500">Business Service</label>
+                  <input
+                    type="text"
+                    value={form.businessService}
+                    onChange={(e) => setForm((prev) => ({ ...prev, businessService: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </div>
               </div>
                 {canReassign && (
                   <div className="space-y-1.5">
@@ -208,12 +355,16 @@ function IncidentDetailsCard({
                   </div>
                 )}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-500">Description</label>
+                  <label className="text-xs font-medium text-slate-500">
+                    Description {descriptionLocked && <span className="font-normal text-slate-400">(read-only for your role)</span>}
+                  </label>
                   <textarea
                     rows={4}
                     value={form.description}
                     onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    readOnly={descriptionLocked}
+                    disabled={descriptionLocked}
+                    className={`w-full rounded-lg border border-slate-200 px-3 py-2 text-sm ${descriptionLocked ? "cursor-not-allowed bg-slate-50 text-slate-500" : ""}`}
                   />
                 </div>
                 <div className="flex gap-2 pt-1">
@@ -226,21 +377,26 @@ function IncidentDetailsCard({
                 </div>
               </div>
             ) : (
-              <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
+              <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <DotField color={STATUS_DOT[incident.status] ?? "bg-slate-400"} label="Status" value={incident.status} />
                 <DotField color={PRIORITY_DOT[incident.priority] ?? "bg-slate-400"} label="Priority" value={incident.priority} />
                 <Field icon={Gauge} label="Impact" value={incident.impact ?? "—"} />
                 <Field icon={Clock} label="Urgency" value={incident.urgency ?? "—"} />
               </div>
 
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-                <Field label="Category" value={incident.category?.categoryName ?? "—"} />
-                <Field label="Sub Category" value={incident.subCategory?.subCategoryName ?? "—"} />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Category" value={
+                  incident.category?.categoryId ? (
+                    <Link href={`/incidents?category=${incident.category.categoryId}`} className="text-blue-600 hover:underline">
+                      {incident.category.categoryName}
+                    </Link>
+                  ) : "—"
+                } />
                 <Field label="Assignment Group" value={incident.assignmentGroup?.groupName ?? "—"} />
               </div>
 
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <Field icon={Users} label="Assigned To" value={incident.assignedTo?.fullName ?? "Unassigned"} />
                 <Field icon={MapPin} label="Location" value={incident.location?.locationName ?? "—"} />
                 <Field icon={Laptop2} label="Affected Asset" value={incident.affectedAsset ?? "—"} />
@@ -272,14 +428,14 @@ function IncidentDetailsCard({
                 </div>
               ) : null}
 
-              <div className="border-t border-slate-100 pt-5">
-                <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Additional Information</p>
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+              <div className="border-t border-slate-100 pt-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Additional Information</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <Field icon={Phone} label="Contact Number" value={incident.contactNumber ?? "—"} />
                   <Field icon={Mail} label="Email ID" value={incident.createdBy?.email ?? "—"} />
                   <Field icon={Building2} label="Department" value={incident.department ?? "—"} />
                 </div>
-                <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <Field label="Business Service" value={incident.businessService ?? "—"} />
                   <Field icon={Timer} label="SLA" value={incident.slaResponseTarget ? `Target ${fmtDate(incident.slaResponseTarget)}` : "—"} />
                 </div>
@@ -306,9 +462,14 @@ function SLACard({ incident }: { incident: Incident }): React.JSX.Element {
   // Calculate response time progress (0-100)
   const createdAt = new Date(incident.createdAt);
   const responseDuration = responseTarget.getTime() - createdAt.getTime();
-  const responseElapsed = Math.max(0, now.getTime() - createdAt.getTime());
+  // Once claimed, the response clock stops — freeze elapsed time at the
+  // claim moment instead of the live clock, or the bar keeps advancing
+  // (and eventually turns red/"Breached") even after the badge already
+  // reads "Met" from `incident.slaResponseMet`.
+  const responseClockEnd = incident.claimedAt ? new Date(incident.claimedAt) : now;
+  const responseElapsed = Math.max(0, responseClockEnd.getTime() - createdAt.getTime());
   const responsePct = Math.min(100, (responseElapsed / responseDuration) * 100);
-  
+
   // Calculate resolution time progress (0-100)
   const resolutionDuration = resolutionTarget.getTime() - createdAt.getTime();
   const resolutionElapsed = Math.max(0, now.getTime() - createdAt.getTime());
@@ -337,7 +498,9 @@ function SLACard({ incident }: { incident: Incident }): React.JSX.Element {
           <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
             <div 
               className={`h-full rounded-full transition-all ${
-                responsePct >= 100 ? "bg-red-500" : responsePct >= 75 ? "bg-amber-500" : "bg-blue-500"
+                incident.slaResponseMet
+                  ? "bg-emerald-500"
+                  : responsePct >= 100 ? "bg-red-500" : responsePct >= 75 ? "bg-amber-500" : "bg-blue-500"
               }`} 
               style={{ width: `${Math.min(100, responsePct)}%` }} 
             />
@@ -402,6 +565,8 @@ function activityIcon(type: string): { bg: string; Icon: React.ElementType } {
     case "claimed":
       return { bg: "bg-emerald-100 text-emerald-600", Icon: UserCheck };
     case "priority_change":
+    case "urgency_change":
+    case "impact_change":
       return { bg: "bg-amber-100 text-amber-700", Icon: AlertCircle };
     default:
       return { bg: "bg-sky-100 text-sky-600", Icon: PlayCircle };
@@ -416,6 +581,10 @@ function activityLabel(act: IncidentActivity): string {
       return "Status Updated";
     case "priority_change":
       return "Priority Updated";
+    case "urgency_change":
+      return "Urgency Updated";
+    case "impact_change":
+      return "Impact Updated";
     case "assignment_change":
       return "Assigned";
     case "claimed":
@@ -429,18 +598,6 @@ function activityLabel(act: IncidentActivity): string {
   }
 }
 
-function activityMeta(act: IncidentActivity): string | undefined {
-  if (act.type === "assignment_change") {
-    const target = typeof act.meta?.to === "string" ? act.meta.to : "Unassigned";
-    return `to ${target}`;
-  }
-
-  if (act.type === "created") {
-    return act.author?.fullName ? `by ${act.author.fullName}` : "by System";
-  }
-
-  return act.author?.fullName ? `by ${act.author.fullName}` : undefined;
-}
 
 
 function TimelineCard({ activities }: { activities: IncidentActivity[] }): React.JSX.Element {
@@ -466,8 +623,14 @@ function TimelineCard({ activities }: { activities: IncidentActivity[] }): React
               </div>
               <div className="pb-5">
                 <p className="text-sm font-semibold text-slate-800">{activityLabel(act)}</p>
-                {activityMeta(act) && <p className="text-xs text-slate-400">{activityMeta(act)}</p>}
-                <p className="mt-0.5 text-xs text-slate-400">{fmtDate(act.createdAt)}</p>
+                {act.content && (
+                  <p className="mt-0.5 text-xs text-slate-600">{act.content}</p>
+                )}
+                <p className="mt-0.5 text-xs text-slate-400">
+                  {[act.author?.fullName ? `by ${act.author.fullName}` : null, fmtDate(act.createdAt)]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
               </div>
             </div>
           );
@@ -577,7 +740,10 @@ function RelatedItemsCard(): React.JSX.Element {
 export default function IncidentDetailPage(): React.JSX.Element {
   const params = useParams<{ id: string }>();
   const incidentId = Array.isArray(params?.id) ? params.id[0] : params?.id ?? "";
-  const { user, isAnalyst, isAdmin, isManager } = useAuth();
+  const { user, isAnalyst, isAdmin, isManager, isEngineer, isServiceDesk } = useAuth();
+  // Engineers can edit every other incident field/option, but Description
+  // stays locked in the UI (and is rejected server-side if sent anyway).
+  const descriptionLocked = isEngineer && !isAdmin && !isManager && !isServiceDesk;
   const { toast } = useToast();
   const { activities, addActivity } = useIncidentActivities(incidentId);
   const [incident, setIncident] = useState<Incident | null>(null);
@@ -586,8 +752,11 @@ export default function IncidentDetailPage(): React.JSX.Element {
   const [loading, setLoading] = useState(true);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState<{ status: string; priority: string; description: string; assignedTo: number | ""; }>({
+  const [form, setForm] = useState<IncidentForm>({
     status: "", priority: "", description: "", assignedTo: "",
+    impact: "", urgency: "",
+    categoryId: "", subCategoryId: "", groupId: "", locationId: "",
+    affectedAsset: "", businessService: "", contactNumber: "", department: "",
   });
   const { items: groups } = useAdminAssignmentGroup();
   const [claiming, setClaiming] = useState(false);
@@ -595,9 +764,17 @@ export default function IncidentDetailPage(): React.JSX.Element {
   const [resolveOpen, setResolveOpen] = useState(false);
   const [statusOptions, setStatusOptions] = useState<string[]>([]);
   const [priorityOptions, setPriorityOptions] = useState<string[]>([]);
+  const [impactOptions, setImpactOptions] = useState<string[]>([]);
+  const [urgencyOptions, setUrgencyOptions] = useState<string[]>([]);
+  const [categories, setCategories] = useState<AdminCategory[]>([]);
+  const [subCategories, setSubCategories] = useState<AdminSubCategory[]>([]);
+  const [locationOptions, setLocationOptions] = useState<AdminLocation[]>([]);
 
-  // Pull from the same admin-configured Status / Priority lists used when
-  // creating an incident, so anything added there is selectable here too.
+  // Pull from the same admin-configured lists used when creating an
+  // incident, so every field that's editable there is editable here too
+  // (see requirement: Engineers/Analysts can edit all incident fields except
+  // Description, so the edit form needs to expose all of them, not just
+  // Status/Priority).
   useEffect(() => {
     apiFetch<AdminStatus[]>("/status")
       .then((s) => setStatusOptions(s.filter((x) => x.isActive && x.type === "incident").map((x) => x.statusName)))
@@ -605,6 +782,11 @@ export default function IncidentDetailPage(): React.JSX.Element {
     apiFetch<AdminPriority[]>("/priority")
       .then((p) => setPriorityOptions(p.filter((x) => x.isActive).map((x) => x.priorityName)))
       .catch(() => {});
+    ImpactApi.list().then((i: AdminImpact[]) => setImpactOptions(i.filter((x) => x.isActive).map((x) => x.impactName))).catch(() => {});
+    UrgencyApi.list().then((u: AdminUrgency[]) => setUrgencyOptions(u.filter((x) => x.isActive).map((x) => x.urgencyName))).catch(() => {});
+    CategoriesApi.list().then((c: AdminCategory[]) => setCategories(c.filter((x) => x.isActive))).catch(() => {});
+    SubCategoryApi.list().then((s: AdminSubCategory[]) => setSubCategories(s.filter((x) => x.isActive))).catch(() => {});
+    LocationApi.list().then((l: AdminLocation[]) => setLocationOptions(l.filter((x) => x.isActive))).catch(() => {});
   }, []);
 
   const handleSendMessage = async (message: string) => {
@@ -665,6 +847,23 @@ export default function IncidentDetailPage(): React.JSX.Element {
     }
   };
 
+  const formFromIncident = (incidentData: Incident): IncidentForm => ({
+    status: incidentData.status,
+    priority: incidentData.priority,
+    description: incidentData.description ?? "",
+    assignedTo: incidentData.assignedTo?.userId ?? "",
+    impact: incidentData.impact ?? "",
+    urgency: incidentData.urgency ?? "",
+    categoryId: incidentData.category?.categoryId ?? "",
+    subCategoryId: incidentData.subCategory?.subCategoryId ?? "",
+    groupId: incidentData.assignmentGroup?.groupId ?? "",
+    locationId: incidentData.location?.locationId ?? "",
+    affectedAsset: incidentData.affectedAsset ?? "",
+    businessService: incidentData.businessService ?? "",
+    contactNumber: incidentData.contactNumber ?? "",
+    department: incidentData.department ?? "",
+  });
+
   useEffect(() => {
     if (!incidentId) return;
 
@@ -673,12 +872,7 @@ export default function IncidentDetailPage(): React.JSX.Element {
         setLoading(true);
         const incidentData = await IncidentsApi.getOne(incidentId);
         setIncident(incidentData);
-        setForm({
-          status: incidentData.status,
-          priority: incidentData.priority,
-          description: incidentData.description ?? "",
-          assignedTo: incidentData.assignedTo?.userId ?? "",
-        });
+        setForm(formFromIncident(incidentData));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load incident");
       } finally {
@@ -691,12 +885,7 @@ export default function IncidentDetailPage(): React.JSX.Element {
 
   const startEdit = () => {
     if (!incident) return;
-    setForm({
-      status: incident.status,
-      priority: incident.priority,
-      description: incident.description ?? "",
-      assignedTo: incident.assignedTo?.userId ?? "",
-    });
+    setForm(formFromIncident(incident));
     setEditing(true);
   };
 
@@ -707,7 +896,17 @@ export default function IncidentDetailPage(): React.JSX.Element {
       const updated = await IncidentsApi.update(incidentId, {
         status: form.status as Incident["status"],
         priority: form.priority as Incident["priority"],
-        description: form.description,
+        impact: form.impact || undefined,
+        urgency: form.urgency || undefined,
+        categoryId: form.categoryId === "" ? undefined : Number(form.categoryId),
+        subCategoryId: form.subCategoryId === "" ? undefined : Number(form.subCategoryId),
+        groupId: form.groupId === "" ? null : Number(form.groupId),
+        locationId: form.locationId === "" ? undefined : Number(form.locationId),
+        affectedAsset: form.affectedAsset,
+        businessService: form.businessService,
+        contactNumber: form.contactNumber,
+        department: form.department,
+        ...(descriptionLocked ? {} : { description: form.description }),
         ...(canReassign ? { assignedTo: form.assignedTo === "" ? null : Number(form.assignedTo) } : {}),
       });
       setIncident(updated);
@@ -741,7 +940,13 @@ export default function IncidentDetailPage(): React.JSX.Element {
 
   return (
     <div className="min-h-screen w-full bg-[#F7F9FC] px-6 py-5">
-      <Breadcrumb incidentCode={incident.incidentCode} />
+      <Breadcrumb
+        items={[
+          { label: "Home", href: "/home" },
+          { label: (isAdmin || isAnalyst) ? "All Incidents" : "My Incidents", href: "/incidents" },
+          { label: incident.incidentCode ?? `#${incident.incidentId}` },
+        ]}
+      />
 
       <div className="mb-5 mt-4 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
@@ -828,6 +1033,13 @@ export default function IncidentDetailPage(): React.JSX.Element {
             groupMembers={groups.find((g) => g.groupId === incident.assignmentGroup?.groupId)?.members ?? []}
             statusOptions={statusOptions}
             priorityOptions={priorityOptions}
+            descriptionLocked={descriptionLocked}
+            categories={categories}
+            subCategories={subCategories}
+            impactOptions={impactOptions}
+            urgencyOptions={urgencyOptions}
+            assignmentGroups={groups}
+            locationOptions={locationOptions}
           />
           <SLACard incident={incident} />
         </div>

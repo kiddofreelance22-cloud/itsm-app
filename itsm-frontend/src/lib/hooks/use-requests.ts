@@ -49,15 +49,33 @@ export function useRequest(id: number) {
   const [request, setRequest] = useState<ServiceRequest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
-  useEffect(() => {
+  const refetch = useCallback(() => {
     setIsLoading(true);
-    RequestsApi.getOne(id)
+    return RequestsApi.getOne(id)
       .then(setRequest)
       .catch((e) => setError((e instanceof Error ? e.message : String(e))))
       .finally(() => setIsLoading(false));
   }, [id]);
 
-  return { request, isLoading, error };
+  useEffect(() => { refetch(); }, [refetch]);
+
+  const cancel = useCallback(
+    async (comments?: string) => {
+      try {
+        const updated = await RequestsApi.cancel(id, comments);
+        setRequest(updated);
+        toast({ title: "Request cancelled", variant: "success" });
+        return true;
+      } catch (e: unknown) {
+        toast({ title: "Couldn't cancel request", description: (e instanceof Error ? e.message : String(e)), variant: "error" });
+        return false;
+      }
+    },
+    [id, toast]
+  );
+
+  return { request, isLoading, error, refetch, cancel };
 }
 

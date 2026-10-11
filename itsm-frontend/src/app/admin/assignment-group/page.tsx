@@ -93,7 +93,12 @@ export default function AdminAssignmentGroupPage() {
     { key: "_actions", label: "", render: (r) => (
         <div className="flex gap-1">
           <button onClick={() => openEdit(r)} className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-blue-600"><Pencil className="size-3.5" /></button>
-          <button onClick={() => setDeleteItem(r)} className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-red-600"><Trash2 className="size-3.5" /></button>
+          <button
+            onClick={() => setDeleteItem(r)}
+            disabled={r.members.length > 0}
+            title={r.members.length > 0 ? "Remove all members before deleting this group" : "Delete group"}
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:text-slate-400 disabled:hover:bg-transparent"
+          ><Trash2 className="size-3.5" /></button>
         </div>
       ),
     },

@@ -81,9 +81,12 @@ function TicketList({
                 <p className="truncate text-sm font-medium text-slate-800">{i.id}</p>
                 <p className="truncate text-xs text-slate-400">{i.summary}</p>
               </div>
-              <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${priorityColor(i.priority)}`}>
-                {i.priority}
-              </span>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${priorityColor(i.priority)}`}>
+                  {i.priority}
+                </span>
+                <span className="text-xs text-slate-500">{i.status}</span>
+              </div>
             </Link>
           ))}
         </div>
@@ -93,10 +96,15 @@ function TicketList({
 }
 
 export function AnalystDashboard() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin} = useAuth();
   const { stats, isLoading } = useAnalystDashboard();
 
   if (isLoading || !stats) return <PageSpinner />;
+
+  // Plain Analysts/Engineers don't have the group-claim "Incident Queue" (see
+  // Sidebar) — send them to their own assigned-only queue instead. Roles that
+  // triage a group's backlog keep the fuller queue view.
+  const incidentsHref = "/incidents/queue";
 
   return (
     <div className="w-full">
@@ -110,10 +118,10 @@ export function AnalystDashboard() {
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard icon={AlertCircle} label="Incidents" href="/incidents/queue" total={stats.incidents.open ?? 0} rows={[
-          { label: "Open", value: stats.incidents.open ?? 0 },
-          { label: "In Progress", value: stats.incidents.inProgress ?? 0 },
-          { label: "Resolved Today", value: stats.incidents.resolvedToday ?? 0, tone: "text-emerald-600" },
+        <StatCard icon={AlertCircle} label="Incidents" href={incidentsHref} total={stats.incidents.totalInWorkgroups ?? 0} rows={[
+          { label: "My Workgroup Total", value: stats.incidents.totalInWorkgroups ?? 0 },
+          { label: "Assigned to Me", value: stats.incidents.mineOpen ?? 0 },
+          { label: "Resolved in Workgroups", value: stats.incidents.totalResolvedInAllWorkgroups ?? 0, tone: "text-emerald-600" },
         ]} />
         <StatCard icon={Clipboard} label="Service Requests" href="/service-requests/my-requests" total={stats.serviceRequests.total} rows={[
           { label: "Open", value: stats.serviceRequests.open },
@@ -163,7 +171,7 @@ export function AnalystDashboard() {
               {stats.unassignedByGroup.map((g) => (
                 <Link
                   key={g.groupId}
-                  href="/incidents/queue"
+                  href={incidentsHref}
                   className="rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2.5 hover:bg-amber-50"
                 >
                   <p className="text-xs font-medium text-slate-600">{g.groupName}</p>
@@ -177,7 +185,7 @@ export function AnalystDashboard() {
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <TicketList title="My Open Incidents" href="/incidents/queue" items={stats.myOpenIncidents} />
+        <TicketList title="My Open Incidents" href={incidentsHref} items={stats.myOpenIncidents} />
         <TicketList title="My Open Service Requests" href="/service-requests/my-requests" items={stats.myOpenRequests} />
       </div>
     </div>

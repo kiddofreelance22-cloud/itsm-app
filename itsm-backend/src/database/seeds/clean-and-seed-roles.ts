@@ -61,6 +61,7 @@ export async function cleanAndSeedRoles(dataSource: DataSource): Promise<void> {
 
     console.log("Seeding permissions...");
     const modules = [
+      "Dashboard",
       "Incidents",
       "Service Requests",
       "Problems",
@@ -132,7 +133,7 @@ export async function cleanAndSeedRoles(dataSource: DataSource): Promise<void> {
       );
     }
 
-    // IT Agent: read and create on Incidents and Service Requests
+    // IT Agent: read and create on Incidents and Service Requests, plus Dashboard read
     const agentRoleId = (
       await queryRunner.query(
         `SELECT "role_id" FROM "roles" WHERE "role_code" = 'ROLE_IT_AGENT' LIMIT 1`
@@ -143,6 +144,7 @@ export async function cleanAndSeedRoles(dataSource: DataSource): Promise<void> {
       `
       SELECT "permission_id" FROM "permissions" 
       WHERE ("module_name" IN ('Incidents', 'Service Requests') AND "permission_type" IN ('Read', 'Create', 'Update'))
+         OR ("module_name" = 'Dashboard' AND "permission_type" = 'Read')
     `
     );
 

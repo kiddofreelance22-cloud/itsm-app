@@ -28,6 +28,11 @@ interface AuthContextValue {
   isServiceDesk: boolean;
   isRequester: boolean;
   isAnalyst: boolean;
+  /** Holds the literal "Engineer" role — same analyst workspace, but with
+   *  restricted field-level edit rights (e.g. cannot edit Description). */
+  isEngineer: boolean;
+  /** Check if user has a specific permission (format: "module:action") */
+  hasPermission: (permission: string) => boolean;
   login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
   logout: () => void;
 }
@@ -73,14 +78,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = user?.roles.some((role) => ["Admin", "Administrator"].includes(role)) ?? false;
   const isApprover =
     user?.roles.some((role) => ["Approver", "Admin", "Administrator"].includes(role)) ?? false;
-  const isAgent = user?.roles.some((role) => ["IT Agent", "Engineer"].includes(role)) ?? false;
+
+  // Role-level capability check: instead of only matching hardcoded role
+  // display names, also look at what the user's role(s) were actually
+  // granted on the Roles Management > Module Permissions screen. Any role
+  // with Update/Delete/Administer rights on a ticket-working module
+  // (Incidents, Service Requests, Problems, Changes) is treated as an
+  // "agent" that works tickets — a plain Read/Create-only role (like the
+  // default End User role) is not. This means a brand-new custom role
+  // (e.g. "Analyst Role Ver1") automatically gets analyst workspace access
+  // once an admin grants it the right module permissions, with no code
+  // change required.
+  const WORK_MODULES = ["incidents", "service requests", "problems", "changes"];
+  const ELEVATED_ACTIONS = ["update", "delete", "administer"];
+  const hasElevatedWorkPermission = (user?.permissions ?? []).some((perm) => {
+    const [module, action] = perm.split(":");
+    return WORK_MODULES.includes(module) && ELEVATED_ACTIONS.includes(action);
+  });
+
+  const isAgent =
+    hasElevatedWorkPermission ||
+    (user?.roles.some((role) => ["IT Agent", "Engineer", "Analyst"].includes(role)) ?? false);
   const isManager = user?.roles.some((role) => ["IT Manager"].includes(role)) ?? false;
   const isServiceDesk = user?.roles.some((role) => ["Service Desk"].includes(role)) ?? false;
   const isEndUser = user?.roles.some((role) => ["End User", "Requester"].includes(role)) ?? false;
+  // Literal "Engineer" role — same analyst workspace access as any other agent,
+  // but with restricted field-level edit rights on incident detail (see
+  // IncidentDetailPage: Description stays read-only for Engineers).
+  const isEngineer = user?.roles.some((role) => ["Engineer"].includes(role)) ?? false;
   // "Analyst workspace" (queue, analyst dashboard, resolve actions) applies to anyone who
   // works tickets rather than just raising them.
   const isAnalyst = isAgent || isManager || isServiceDesk || isApprover;
   const isRequester = !isAnalyst && !isAdmin;
+
+  // Permission checking function
+  const hasPermission = useCallback((permission: string): boolean => {
+    if (!user?.permissions) return false;
+    // Check exact permission match (e.g., "incidents:read")
+    return user.permissions.includes(permission.toLowerCase());
+  }, [user?.permissions]);
 
   return (
     <AuthContext.Provider
@@ -94,6 +130,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isServiceDesk,
         isRequester,
         isAnalyst,
+        isEngineer,
+        hasPermission,
         login,
         logout,
       }}

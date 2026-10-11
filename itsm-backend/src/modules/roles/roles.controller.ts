@@ -67,6 +67,13 @@ export class RolesController {
     return this.rolesService.getRolePermissions(roleId);
   }
 
+  /** Users currently holding this role — powers the Users tab on the Edit Role panel */
+  @Get(":roleId/users")
+  @Roles("Administrator")
+  getUsersForRole(@Param("roleId", ParseIntPipe) roleId: number) {
+    return this.rolesService.getUsersForRole(roleId);
+  }
+
   /** Update permissions for a role */
   @Put(":roleId/permissions")
   @Roles("Administrator")

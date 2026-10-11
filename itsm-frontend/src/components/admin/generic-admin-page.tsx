@@ -42,8 +42,8 @@ function buildFormFromItem<T extends object>(item: T, fields: FieldDef[]): Admin
 interface FieldDef {
   key: string;
   label: string;
-  type?: "text" | "textarea" | "select" | "checkbox" | "number";
-  options?: string[];
+  type?: "text" | "textarea" | "select" | "search" | "checkbox" | "number";
+  options?: string[] | { label: string; value: string }[];
   required?: boolean;
   placeholder?: string;
 }
@@ -166,8 +166,17 @@ export function GenericAdminPage<T extends object>({
                     onChange={(e) => setForm((p) => ({ ...p, [f.key]: e.target.value }))}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="">— Select —</option>
-                    {f.options?.map((o) => <option key={o} value={o}>{o}</option>)}
+                    {f.options?.map((o) => typeof o === "string" ? <option key={o} value={o}>{o}</option> : <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
+                ) : f.type === "search" ? (
+                  <>
+                    <Input list={`${f.key}-options`} value={String(form[f.key] ?? "")}
+                      onChange={(e) => setForm((p) => ({ ...p, [f.key]: e.target.value }))}
+                      placeholder={f.placeholder} required={f.required !== false} />
+                    <datalist id={`${f.key}-options`}>
+                      {f.options?.map((o) => <option key={typeof o === "string" ? o : o.value} value={typeof o === "string" ? o : o.label} />)}
+                    </datalist>
+                  </>
                 ) : f.type === "checkbox" ? (
                   <div className="flex items-center gap-2">
                     <input type="checkbox" checked={Boolean(form[f.key])}
