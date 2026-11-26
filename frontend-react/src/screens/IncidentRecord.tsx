@@ -12,6 +12,9 @@ import {
 } from "../configApi";
 import { ErrorBar, errMsg, formatDateTime } from "../components/configKit";
 import { BrowsePicker, treeToNodes } from "../components/BrowsePicker";
+import { LinkPicker } from "../components/LinkPicker";
+import { LinkedKnowledgeCard } from "../components/LinkedKnowledge";
+import type { RelatedLink } from "../requestsApi";
 
 type Raw = Record<string, any>;
 interface Activity { activityId: number; type: string; content: string | null; isWorkNote: boolean; createdAt: string; author?: { userId: number; fullName: string } | null }
@@ -27,6 +30,8 @@ const PRIORITY_STYLE: Record<string, { bg: string; color: string }> = {
 const TL_DOT: Record<string, string> = { created: "●", status_change: "↻", resolved: "✓", closed: "■", reopened: "↺", assignment_change: "→", claimed: "→", group_assigned: "→", sla_breached: "!" };
 const norm = (s: string) => s.replace(/^\s*\d+\s*-\s*/, "").trim().toLowerCase();
 const LOCKED = ["Closed", "Cancelled"];
+const requiresSupportingFile = (name: string, description: string) =>
+  /\b(?:attach|upload|screenshot|evidence|logs?)\b/i.test(`${name} ${description}`);
 /** "Pending", "Pending Customer", "Pending Vendor"… */
 const isPendingStatus = (s?: string | null) => /^pending/i.test((s ?? "").trim());
 const byNewest = <T extends { createdAt: string; activityId: number }>(rows: T[]) =>
@@ -69,6 +74,7 @@ export function IncidentRecordPage() {
   const [msg, setMsg] = useState(""); const [isNote, setIsNote] = useState(false);
   const [checklist, setChecklist] = useState<IncidentChecklist | null>(null);
   const [links, setLinks] = useState<RelatedItem[]>([]);
+  const [ticketLinks, setTicketLinks] = useState<RelatedLink[]>([]);
   const [linkOpen, setLinkOpen] = useState(false); const [linkRef, setLinkRef] = useState("");
   const [wos, setWos] = useState<WorkOrderRow[]>([]);
   const [woForm, setWoForm] = useState<null | "new" | WorkOrderRow>(null);
@@ -78,6 +84,7 @@ export function IncidentRecordPage() {
   const [attErr, setAttErr] = useState("");
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  const checklistFileRef = useRef<HTMLInputElement>(null);
 
   // reference data
   const statuses = useAsync(() => api.get<Raw[]>("/status"), []);
@@ -95,19 +102,25 @@ export function IncidentRecordPage() {
   const holdQ = useAsync(() => masterApi.list("/on-hold-reasons").catch(() => []), []);
   const resCodesQ = useAsync(() => api.get<Raw[]>("/resolution-codes").catch(() => []), []);
   const rulesQ = useAsync(() => ruleApi.mandatory().catch(() => [] as MandatoryRule[]), []);
-  const usersQ = useAsync(() => api.get<Raw[]>("/users").catch(() => []), []);
+  // /users is Admin-only; analysts use the light assignable list so engineer names show in the Assigned To lists.
+  const usersQ = useAsync(() => api.get<Raw[]>("/users/assignable").catch(() => api.get<Raw[]>("/users").catch(() => [])), []);
 
   const reloadBits = useCallback(async () => {
-    const [a, c, l, w, f, ap] = await Promise.allSettled([
-      api.get<Activity[]>(`/incidents/${encodeURIComponent(id)}/activities`), recordApi.checklist(id), recordApi.links(id), recordApi.workOrders(id),
+    const [a, c, l, tl, w, f, ap] = await Promise.allSettled([
+      api.get<Activity[]>(`/incidents/${encodeURIComponent(id)}/activities`), recordApi.checklist(id), recordApi.links(id), incidentApi.ticketLinks(id), recordApi.workOrders(id),
       attachmentApi.list(id), approvalApi.list(false),
     ]);
     if (a.status === "fulfilled") setActs(a.value);
     if (c.status === "fulfilled") setChecklist(c.value);
     if (l.status === "fulfilled") setLinks(l.value);
+    if (tl.status === "fulfilled") setTicketLinks(tl.value);
     if (w.status === "fulfilled") setWos(w.value);
     if (f.status === "fulfilled") setAtts(f.value);
     if (ap.status === "fulfilled") setApprovals(ap.value.filter((x) => x.incidentId === id || x.incidentRef === id));
+  }, [id]);
+  const reloadTicketLinks = useCallback(async () => {
+    try { setTicketLinks(await incidentApi.ticketLinks(id)); }
+    catch (e) { setErr(errMsg(e, "Unable to load linked tickets.")); }
   }, [id]);
   const load = useCallback(async () => {
     try { setInc(await api.get<Raw>(`/incidents/${encodeURIComponent(id)}`)); setLoadErr(""); }
@@ -133,14 +146,13 @@ export function IncidentRecordPage() {
     const open = approvals.filter((a) => !(a as any).consumedAt);
     const pending = open.find((a) => a.status === "Pending"); const approved = open.find((a) => a.status === "Approved");
     const rejected = approvals.find((a) => a.status === "Rejected");
-    if (pending) setNotice({ ok: false, msg: `${pending.approvalType} requested ${formatDateTime(pending.requestedAt)} — waiting for an approver in Approve Incident Records.` });
+    if (pending) setNotice({ ok: false, msg: `${pending.approvalType} requested ${formatDateTime(pending.requestedAt)} — waiting for an approver in My Approvals.` });
     else if (approved && status !== "Closed") setNotice({ ok: true, msg: `${approved.approvalType} approved${approved.approverNote ? ` — “${approved.approverNote}”` : ""}. You can now ${approved.action.toLowerCase()} this incident.` });
     else if (rejected && !locked) setNotice((n) => n ?? { ok: false, msg: `${rejected.approvalType} was rejected${rejected.approverNote ? `: ${rejected.approverNote}` : "."}` });
   }, [approvals, status, locked]);
 
   // ── option lists ──
   const names = (r: Raw[] | null | undefined, k: string) => (r ?? []).filter((x) => x.isActive !== false).map((x) => x[k] as string);
-  const catNames = useMemo(() => { const out: Raw[] = []; const walk = (n: Raw[]) => n.forEach((x) => { out.push(x); walk(x.children ?? []); }); walk(catTree.data ?? []); return out; }, [catTree.data]);
   const categoryNodes = useMemo(() => treeToNodes(catTree.data, "categoryId", "categoryName"), [catTree.data]);
   const classificationNodes = useMemo(() => (clsQ.data ?? []).filter((c) => c.isActive !== false).map((c) => ({ id: String(c.classificationId), label: String(c.name), parentId: c.parentId ? String(c.parentId) : null })), [clsQ.data]);
   const statusOptions = useMemo(() => {
@@ -232,6 +244,12 @@ export function IncidentRecordPage() {
     if (String(edit.classificationId ?? "") !== String(inc.classificationId ?? "")) body.classificationId = edit.classificationId ? Number(edit.classificationId) : null;
     if ((edit.department ?? "") !== (inc.department ?? "")) body.department = edit.department;
     if (String(edit.slaServiceWindowId ?? "") !== String(inc.slaServiceWindowId ?? "")) body.slaServiceWindowId = edit.slaServiceWindowId ? Number(edit.slaServiceWindowId) : null;
+    // Priority is calculated from Impact × Urgency; setting it by hand needs a written, audited reason.
+    if (body.priority !== undefined && body.impact === undefined && body.urgency === undefined) {
+      const why = (window.prompt(`Priority is calculated from Impact and Urgency. Reason for changing it to "${body.priority}"?`) ?? "").trim();
+      if (!why) { setErr("A reason is required to override the calculated priority."); return; }
+      body.priorityOverrideReason = why;
+    }
     if (!Object.keys(body).length) { setEdit(null); return; }
     setSaving(true); setErr("");
     try { await api.patch(`/incidents/${encodeURIComponent(inc.incidentId)}`, body); setEdit(null); await load(); }
@@ -307,11 +325,17 @@ export function IncidentRecordPage() {
   };
   const upload = async (files: FileList | null) => {
     if (!files) return; setAttErr("");
+    let uploaded = false;
     for (const f of Array.from(files)) {
       const p = checkAttachment(f); if (p) { setAttErr(p); continue; }
-      try { await attachmentApi.upload(id, f); } catch (e) { setAttErr(errMsg(e)); }
+      try { await attachmentApi.upload(id, f); uploaded = true; } catch (e) { setAttErr(errMsg(e)); }
     }
-    setAtts(await attachmentApi.list(id));
+    try {
+      setAtts(await attachmentApi.list(id));
+      if (uploaded && err.includes("Attach the supporting file to this incident before ticking")) setErr("");
+    } catch (e) {
+      setAttErr(errMsg(e, "Unable to refresh the incident attachments."));
+    }
   };
 
   const openWoForm = (w: "new" | WorkOrderRow) => {
@@ -322,6 +346,7 @@ export function IncidentRecordPage() {
   };
   const saveWo = async () => {
     if (!wo.title.trim()) { setWoErr("Title is required."); return; }
+    if (wo.status === "Completed" && !wo.assignedTo) { setWoErr("Assign this work order to an engineer before completing it."); return; }
     const payload = { incidentId: inc?.incidentId, title: wo.title.trim(), notes: wo.notes.trim() || null, groupId: wo.groupId ? Number(wo.groupId) : null, assignedTo: wo.assignedTo ? Number(wo.assignedTo) : null, priority: wo.priority, status: wo.status };
     try {
       if (woForm === "new") await workOrderApi.create(payload); else if (woForm) await workOrderApi.update(woForm.workOrderId, payload);
@@ -347,7 +372,7 @@ export function IncidentRecordPage() {
   const ps = configuredPriorityColor
     ? { bg: `${configuredPriorityColor}1A`, color: "#1D2433" }
     : PRIORITY_STYLE[priorityName] ?? PRIORITY_STYLE.Low;
-  const field = (label: string, key: string, view: React.ReactNode, input: React.ReactNode, reqKey?: string) => {
+  const field = (label: string, _key: string, view: React.ReactNode, input: React.ReactNode, reqKey?: string) => {
     const reason = editing && reqKey ? requiredReason(reqKey, edit) : null;
     return (
       <div className="field-group" key={label}>
@@ -394,7 +419,7 @@ export function IncidentRecordPage() {
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <div className="page-title" style={{ margin: 0 }}>{ref}</div>
-              <span className="dash-badge" style={{ background: ss.bg, color: ss.color }}>{status}</span>
+              <span className="dash-badge" style={{ background: ss.bg, color: ss.color }}>{status === "Open" ? "New" : status}</span>
               <span className="dash-badge" style={{ background: ps.bg, color: ps.color }}>
                 {configuredPriorityColor && <span className="dot" style={{ background: configuredPriorityColor }} />}
                 {inc.priority}
@@ -590,8 +615,34 @@ export function IncidentRecordPage() {
               </div>
 
               <div className="card" style={{ padding: 20 }}>
+                <div className="proto-eyebrow-title" style={{ marginBottom: 10 }}>Linked tickets{ticketLinks.length ? ` (${ticketLinks.length})` : ""}</div>
+                {ticketLinks.length === 0 ? <div style={{ fontSize: 12.5, color: "#98A2B3", marginBottom: 12 }}>Nothing is linked to this incident yet.</div> : (
+                  <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+                    {ticketLinks.map((item) => (
+                      <div key={`${item.direction}${item.linkId}`} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>
+                        <span className="cb-status" style={{ flex: "none" }}>{item.type === "request" ? "Service request" : item.type === "work_order" ? "Work order" : item.type[0].toUpperCase() + item.type.slice(1)}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div><strong>{item.number}</strong> <span style={{ overflowWrap: "anywhere" }}>{item.title}</span></div>
+                          <div style={{ fontSize: 12, color: "var(--muted)" }}>{[item.status, item.group, item.direction === "in" ? "Linked from another incident" : item.relation].filter(Boolean).join(" · ")}</div>
+                        </div>
+                        {item.targetId != null && item.type === "incident" && <Link className="btn-ghost btn-sm" to={`/incidents/${item.targetId}`}>Open</Link>}
+                        {item.targetId != null && item.type === "request" && <Link className="btn-ghost btn-sm" to={`/service-requests/queue/${item.targetId}`}>Open</Link>}
+                        {!locked && <button type="button" className="admin-master-icon-button danger" aria-label={`Unlink ${item.number}`} onClick={async () => {
+                          try { setTicketLinks(await incidentApi.removeTicketLink(id, item.linkId)); }
+                          catch (e) { setErr(errMsg(e, "Unable to unlink ticket.")); }
+                        }}><X size={13} /></button>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {!locked && <LinkPicker incidentId={id} onLinked={() => void reloadTicketLinks()} />}
+              </div>
+
+              <LinkedKnowledgeCard incidentId={id} locked={locked} />
+
+              <div className="card" style={{ padding: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div className="proto-eyebrow-title">Related Items</div>
+                  <div className="proto-eyebrow-title">Related Incidents</div>
                   {!locked && <button type="button" className="btn-ghost btn-sm" onClick={() => setLinkOpen(!linkOpen)}>+ Link</button>}
                 </div>
                 {linkOpen && (
@@ -683,6 +734,21 @@ export function IncidentRecordPage() {
                 {it.required && <span className="chip" style={{ fontSize: 11 }}>Required</span>}
               </label>
             ))}
+            {(checklist?.items ?? []).some((it) => requiresSupportingFile(it.name, it.description)) && (
+              <>
+                <input ref={checklistFileRef} type="file" multiple hidden accept=".jpg,.jpeg,.png,.pdf,.docx"
+                  onChange={(e) => { void upload(e.target.files); e.target.value = ""; }} />
+                {attErr && <div className="error-text" role="alert" style={{ marginTop: 8 }}>{attErr}</div>}
+                {(checklist?.items ?? []).filter((it) => requiresSupportingFile(it.name, it.description) && !it.done).map((it) => (
+                  <div key={`evidence-${it.id}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 10, padding: "9px 12px", borderRadius: 7, background: atts.length ? "#ECFDF3" : "#FFFAEB", border: `1px solid ${atts.length ? "#ABEFC6" : "#FEDF89"}` }}>
+                    <span style={{ fontSize: 12.5, color: atts.length ? "#067647" : "#B54708" }}>
+                      {atts.length ? `${atts.length} supporting file${atts.length === 1 ? "" : "s"} attached.` : `Attach a supporting file before completing “${it.name}”.`}
+                    </span>
+                    {!locked && !atts.length && <button type="button" className="btn-ghost btn-sm" onClick={() => checklistFileRef.current?.click()}><Paperclip size={13} /> Attach file</button>}
+                  </div>
+                ))}
+              </>
+            )}
             {reqOpen > 0 && <div style={{ fontSize: 12.5, color: "#B54708", marginTop: 12 }}>Complete all required checklist items before resolving.</div>}
           </div>
         )}

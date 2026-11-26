@@ -14,6 +14,11 @@ export class MasterItemDto {
 }
 export class UpdateMasterItemDto extends PartialType(MasterItemDto) {}
 
+export class WoChecklistItemDto extends MasterItemDto {
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() isRequired?: boolean;
+}
+export class UpdateWoChecklistItemDto extends PartialType(WoChecklistItemDto) {}
+
 // ── Checklist templates: visibility scope + task rows ──
 export const CHECKLIST_TASK_STATUSES = ["Not Applicable", "Mandatory", "Optional"];
 export class ChecklistTaskDto {

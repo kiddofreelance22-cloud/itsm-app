@@ -5,7 +5,14 @@
 
 declare const process: { env: Record<string, string | undefined> };
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "/api";
+
+/** Uploaded files come back as "/uploads/<file>" served by the API, not by this app — point the browser at the API host. */
+export function assetUrl(path?: string | null): string {
+  if (!path) return "";
+  if (/^(https?:|data:|blob:)/i.test(path)) return path;
+  return `${API_BASE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
+}
 const TOKEN_STORAGE_KEY = "meridian_token";
 
 export class ApiError extends Error {
@@ -61,7 +68,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
           ? body.message.join(", ")
           : `Request failed (${res.status})`,
       res.status,
-      body?.error || "unknown_error",
+      body?.code || body?.error || "unknown_error",
       body?.details
     );
   }

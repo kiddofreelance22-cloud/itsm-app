@@ -9,9 +9,10 @@ import { Problem } from "../problems/entities/problem.entity";
 import { Change } from "../changes/entities/change.entity";
 import { DashboardService } from "./dashboard.service";
 import { DashboardController } from "./dashboard.controller";
+import { RequestsModule } from "../requests/requests.module";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Incident, ServiceRequest, User, AssignmentGroup, Task, Problem, Change])],
+  imports: [TypeOrmModule.forFeature([Incident, ServiceRequest, User, AssignmentGroup, Task, Problem, Change]), RequestsModule],
   controllers: [DashboardController],
   providers: [DashboardService],
 })

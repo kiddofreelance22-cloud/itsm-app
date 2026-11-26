@@ -4,7 +4,7 @@ import { ApiError } from "../api";
 export const errMsg = (e: unknown, fallback = "Something went wrong.") =>
   e instanceof ApiError ? e.message : e instanceof Error ? e.message : fallback;
 
-export function PageHeader({ crumb, title, subtitle, onClose }: { crumb: string; title: string; subtitle?: string; onClose?: () => void }) {
+export function PageHeader({ crumb, title, subtitle, onClose, action }: { crumb: string; title: string; subtitle?: string; onClose?: () => void; action?: React.ReactNode }) {
   return (
     <div className="page-header-row">
       <div className="page-header-left">
@@ -12,7 +12,10 @@ export function PageHeader({ crumb, title, subtitle, onClose }: { crumb: string;
         <div className="page-title">{title}</div>
         {subtitle && <div className="page-subtitle">{subtitle}</div>}
       </div>
-      <button className="btn-ghost" onClick={onClose ?? (() => window.history.back())}>Close</button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap", gap: 10, flexShrink: 0 }}>
+        {action}
+        <button className="btn-ghost" onClick={onClose ?? (() => window.history.back())}>Close</button>
+      </div>
     </div>
   );
 }

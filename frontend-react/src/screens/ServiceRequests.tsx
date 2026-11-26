@@ -1,14 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Clock3, Search, ShoppingCart } from "lucide-react";
-import { api } from "../api";
+import { LookupField } from "../components/LookupField";
+import { lookupSourceLabel, normalizeLookupSource } from "../lookupSources";
+import { api, assetUrl } from "../api";
 import { ErrorBar, errMsg } from "../components/configKit";
-import { SearchSelect, type SearchOption } from "../components/SearchSelect";
+import { type SearchOption } from "../components/SearchSelect";
+import { useAuth } from "../AuthContext";
 import { useAsync } from "../hooks";
-import { Link } from "../router";
+import { Link, useRouter, useRouteParams } from "../router";
+import { ServiceCatalogBrowser } from "./ServiceCatalogBrowser";
+import { money } from "../components/serviceRequestKit";
 import {
+  lifecycleApi,
+  requestConfigApi,
   serviceRequestApi,
   type CatalogVariable,
   type ServiceCatalog,
+  type PathPreview,
 } from "../requestsApi";
 
 type FieldValue = string | string[] | boolean | File;
@@ -30,9 +37,22 @@ function defaultFieldValue(variable: CatalogVariable): FieldValue {
   return variable.defaultValue ?? "";
 }
 
+/** "Service Catalog" — category tree + service cards (prototype page 1). */
 export function ServiceRequestsPage() {
+  return <ServiceCatalogBrowser />;
+}
+
+/** "Service Request Form" — opened from a catalog card via /service-requests/request/:id. */
+export function ServiceRequestFormPage() {
+  const params = useRouteParams("/service-requests/request/:id");
+  const id = params ? Number(params.id) : NaN;
+  return <RequestFormInner catalogId={Number.isFinite(id) ? id : null} />;
+}
+
+function RequestFormInner({ catalogId }: { catalogId: number | null }) {
+  const { navigate } = useRouter();
   const catalogsQuery = useAsync(() => serviceRequestApi.catalogs(), []);
-  const [selectedCatalogId, setSelectedCatalogId] = useState<number | null>(null);
+  const [selectedCatalogId] = useState<number | null>(catalogId);
   const [catalogRetry, setCatalogRetry] = useState(0);
   const [selectedCatalog, setSelectedCatalog] = useState<ServiceCatalog | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -41,10 +61,24 @@ export function ServiceRequestsPage() {
   const [lookupLabels, setLookupLabels] = useState<Record<number, string>>({});
   const [lookupError, setLookupError] = useState("");
   const [submitError, setSubmitError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [catalogSearch, setCatalogSearch] = useState("");
-  const [catalogSort, setCatalogSort] = useState<"popular" | "name" | "recent">("popular");
   const [submitting, setSubmitting] = useState(false);
+  const [urgId, setUrgId] = useState<number | null>(null);
+  const [impId, setImpId] = useState<number | null>(null);
+  const [notes, setNotes] = useState("");
+  const { user: me } = useAuth();
+  const [page, setPage] = useState(0);
+  const [forOther, setForOther] = useState(false);
+  const [forUser, setForUser] = useState<{ id: number; name: string } | null>(null);
+  const [forQuery, setForQuery] = useState("");
+  const [forFound, setForFound] = useState<{ userId: number; fullName: string; email?: string }[]>([]);
+  const [serverPath, setServerPath] = useState<PathPreview | null>(null);
+  const [done, setDone] = useState<{ number: string; status: string } | null>(null);
+  const urgenciesQuery = useAsync(() => serviceRequestApi.urgencies(), []);
+  useEffect(() => { setSubmitError(""); }, [values, urgId, impId, forUser]); // stale error banner clears once fields are corrected
+  const impactsQuery = useAsync(() => serviceRequestApi.serviceImpacts(), []);
+  const matrixQuery = useAsync(() => requestConfigApi.matrix(), []);
+  const workflowId = selectedCatalog?.workflow?.workflowId ?? null;
+  const lifecycleQuery = useAsync(() => (workflowId ? lifecycleApi.get(workflowId) : Promise.resolve(null)), [workflowId]);
 
   const hasGroupLookup = !!selectedCatalog?.variables?.some(
     (variable) => variable.fieldType === "group_lookup" && variable.isVisible && variable.isActive,
@@ -64,12 +98,16 @@ export function ServiceRequestsPage() {
     setCatalogError("");
     setSelectedCatalog(null);
     setValues({});
+    setPage(0); setServerPath(null);
     setLookupLabels({});
     setLookupError("");
     serviceRequestApi.catalog(selectedCatalogId)
       .then((catalog) => {
         if (cancelled) return;
         setSelectedCatalog(catalog);
+        // Never pre-select a high urgency/impact (users inflate priority); only a Low/Medium default is kept, otherwise the user must choose.
+        setUrgId(/^(low|medium)$/i.test(catalog.urgency?.urgencyName ?? "") ? catalog.urgency!.urgencyId : null);
+        setImpId(/^(low|medium)$/i.test(catalog.serviceImpact?.impactName ?? "") ? catalog.serviceImpact!.serviceImpactId : null);
         setValues(Object.fromEntries((catalog.variables ?? []).map((variable) => [variable.variableId, defaultFieldValue(variable)])));
       })
       .catch((error: unknown) => {
@@ -88,32 +126,52 @@ export function ServiceRequestsPage() {
     [selectedCatalog],
   );
   const sections = useMemo(() => {
-    const grouped = new Map<string, CatalogVariable[]>();
+    interface FormSection { key: string; name: string; cols: number | null; newPage: boolean; order: number; vars: CatalogVariable[] }
+    const meta = new Map((selectedCatalog?.sections ?? []).map((section) => [section.sectionId, section]));
+    const grouped = new Map<string, FormSection>();
     for (const variable of variables) {
+      const id = variable.section?.sectionId ?? null;
       const name = variable.section?.name || variable.sectionName || "General";
-      grouped.set(name, [...(grouped.get(name) ?? []), variable]);
+      const key = id != null ? `id${id}` : `name${name}`;
+      const sec = id != null ? meta.get(id) : (selectedCatalog?.sections ?? []).find((x) => x.name === name);
+      const cols = /^\[cols:(\d)\]/.exec(sec?.description ?? "");
+      const entry = grouped.get(key) ?? { key, name, cols: cols ? Math.min(3, Math.max(1, Number(cols[1]))) : null, newPage: /\[page\]/.test(sec?.description ?? ""), order: sec?.displayOrder ?? Number.MAX_SAFE_INTEGER, vars: [] };
+      entry.vars.push(variable);
+      grouped.set(key, entry);
     }
-    const order = new Map((selectedCatalog?.sections ?? []).map((section) => [section.name, section.displayOrder]));
-    return [...grouped.entries()].sort(([a], [b]) => (order.get(a) ?? Number.MAX_SAFE_INTEGER) - (order.get(b) ?? Number.MAX_SAFE_INTEGER));
+    return [...grouped.values()].sort((x, y) => x.order - y.order);
   }, [selectedCatalog, variables]);
-  const groups = groupsQuery.data ?? [];
-  const catalogs = useMemo(() => {
-    const query = catalogSearch.trim().toLowerCase();
-    const filtered = (catalogsQuery.data ?? []).filter((catalog) =>
-      !query || [
-        catalog.catalogName,
-        catalog.shortDescription ?? "",
-        catalog.description ?? "",
-        catalog.category?.categoryName ?? "",
-        catalog.serviceCategory?.categoryName ?? "",
-      ].some((field) => field.toLowerCase().includes(query)),
-    );
-    return filtered.sort((a, b) => catalogSort === "recent"
-      ? (b.createdAt ?? "").localeCompare(a.createdAt ?? "")
-      : catalogSort === "name"
-        ? a.catalogName.localeCompare(b.catalogName)
-        : Number(b.showInPopular) - Number(a.showInPopular) || a.catalogName.localeCompare(b.catalogName));
-  }, [catalogSearch, catalogSort, catalogsQuery.data]);
+  // A container marked "Starts a new page" begins the next page of the form.
+  const pages = useMemo(() => {
+    const out: (typeof sections)[] = [[]];
+    sections.forEach((sec) => { if (sec.newPage && out[out.length - 1].length) out.push([]); out[out.length - 1].push(sec); });
+    return out;
+  }, [sections]);
+  const pageIdx = Math.min(page, pages.length - 1);
+  const lastPage = pageIdx === pages.length - 1;
+  const pageTitle = (p: (typeof pages)[number], i: number) => (p[0]?.name && p[0].name !== "General" ? p[0].name : `Page ${i + 1}`);
+  const pageMissing = (pages[pageIdx] ?? []).flatMap((sec) => sec.vars).filter((v) => v.isMandatory && v.fieldType !== "info" && isEmpty(values[v.variableId])).length;
+  useEffect(() => {
+    if (!forOther || forUser || forQuery.trim().length < 2) { setForFound([]); return; }
+    let live = true;
+    const t = setTimeout(() => { api.get<{ userId: number; fullName: string; email?: string }[]>(`/users/directory?q=${encodeURIComponent(forQuery.trim())}`).then((r) => { if (live) setForFound(r.filter((u) => String(u.userId) !== String(me?.id))); }).catch(() => { if (live) setForFound([]); }); }, 250);
+    return () => { live = false; clearTimeout(t); };
+  }, [forQuery, forOther, forUser, me?.id]);
+  // The path follows the answers: ask the server which approvals these answers would trigger.
+  const answersKey = JSON.stringify(Object.entries(values).map(([k, v]) => [k, v instanceof File ? "file" : v]));
+  useEffect(() => {
+    if (!selectedCatalog) return;
+    let live = true;
+    const t = setTimeout(() => {
+      const vv = variables.flatMap((variable) => {
+        const value = values[variable.variableId];
+        if (value === undefined || value instanceof File || (isEmpty(value) && variable.fieldType !== "checkbox")) return [];
+        return [{ variableId: variable.variableId, value: Array.isArray(value) ? value.join(", ") : lookupLabels[variable.variableId] || String(value) }];
+      });
+      serviceRequestApi.previewPath(selectedCatalog.catalogId, vv).then((r) => { if (live) setServerPath(r); }).catch(() => { if (live) setServerPath(null); });
+    }, 350);
+    return () => { live = false; clearTimeout(t); };
+  }, [selectedCatalog, answersKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setValue = (variableId: number, value: FieldValue) => {
     setValues((current) => ({ ...current, [variableId]: value }));
@@ -124,7 +182,7 @@ export function ServiceRequestsPage() {
       const users = await api.get<DirectoryUser[]>(`/users/directory?q=${encodeURIComponent(query.trim())}`);
       setLookupError("");
       return users.map((user) => ({
-        value: String(user.userId),
+        value: user.fullName,
         label: user.fullName,
         sub: [user.email, user.username && `@${user.username}`, user.employeeId && `ID ${user.employeeId}`].filter(Boolean).join(" · "),
       }));
@@ -156,7 +214,6 @@ export function ServiceRequestsPage() {
     event.preventDefault();
     if (!selectedCatalog) return;
     setSubmitError("");
-    setNotice("");
     setLookupError("");
 
     const submissionVariables = (selectedCatalog.variables ?? []).filter(
@@ -188,6 +245,7 @@ export function ServiceRequestsPage() {
       }
     }
 
+    if (!urgId || !impId) { setSubmitError("Select Urgency and Impact before submitting."); return; }
     setSubmitting(true);
     try {
       const uploaded = new Map<number, string>();
@@ -207,10 +265,12 @@ export function ServiceRequestsPage() {
             ?? (value instanceof File ? "" : Array.isArray(value) ? value.join(", ") : lookupLabels[variable.variableId] || String(value));
           return [{ variableId: variable.variableId, value: storedValue }];
         });
-      const created = await serviceRequestApi.create({ catalogId: selectedCatalog.catalogId, variableValues });
-      setNotice(`Request #${created.requestId} has been submitted.`);
-      setSelectedCatalogId(null);
-      setSelectedCatalog(null);
+      if (forOther && !forUser) { setSubmitError("Choose who this request is for, or switch back to Myself."); setSubmitting(false); return; }
+      const created = await serviceRequestApi.create({
+        catalogId: selectedCatalog.catalogId, variableValues, ...(forOther && forUser ? { requestedForUserId: forUser.id } : {}),
+        ...(urgId ? { urgencyId: urgId } : {}), ...(impId ? { serviceImpactId: impId } : {}), ...(notes.trim() ? { notes: notes.trim() } : {}),
+      });
+      setDone({ number: created.requestNumber || `#${created.requestId}`, status: created.status });
     } catch (error) {
       setSubmitError(errMsg(error, "Unable to submit your service request."));
     } finally {
@@ -232,7 +292,7 @@ export function ServiceRequestsPage() {
         control = <div className="service-request-info">{variable.defaultValue || variable.helpText || variable.label}</div>;
         break;
       case "textarea":
-        control = <textarea id={inputId} className="textarea" required={required} disabled={disabled} placeholder={variable.placeholder ?? ""} value={typeof value === "string" ? value : ""} onChange={(event) => setValue(variable.variableId, event.target.value)} />;
+        control = <textarea id={inputId} className="textarea" maxLength={variable.maxLength ?? undefined} required={required} disabled={disabled} placeholder={variable.placeholder ?? ""} value={typeof value === "string" ? value : ""} onChange={(event) => setValue(variable.variableId, event.target.value)} />;
         break;
       case "dropdown":
         control = (
@@ -296,15 +356,15 @@ export function ServiceRequestsPage() {
       case "user_lookup":
       case "group_lookup": {
         const isUser = variable.fieldType === "user_lookup";
-        const groupOptions = groups.map((group) => ({ value: String(group.groupId), label: group.groupName }));
+        const source = isUser ? "users" : normalizeLookupSource(variable.lookupSource);
         control = (
-          <SearchSelect
+          <LookupField
+            source={source}
             value={typeof value === "string" ? value : ""}
             label={lookupLabels[variable.variableId] ?? (typeof value === "string" ? value : "")}
-            fetchOptions={isUser ? searchUsers : undefined}
-            options={isUser ? undefined : groupOptions}
+            fetchOverride={source === "users" ? searchUsers : undefined}
             onSelect={(option) => setLookupValue(variable.variableId, option)}
-            placeholder={variable.lookupSource || variable.placeholder || (isUser ? "Search users…" : "Search groups…")}
+            placeholder={variable.placeholder || (isUser ? "Search people (User table)…" : `Search ${lookupSourceLabel(source).toLowerCase()}…`)}
             disabled={disabled}
             ariaLabel={variable.label}
           />
@@ -325,7 +385,8 @@ export function ServiceRequestsPage() {
             required={required}
             disabled={disabled}
             placeholder={variable.placeholder ?? ""}
-            min={type === "number" ? variable.minValue ?? undefined : variable.dateMin ?? undefined}
+            maxLength={type === "text" ? variable.maxLength ?? undefined : undefined}
+            min={type === "number" ? variable.minValue ?? undefined : type === "date" && variable.noPastDates ? new Date().toISOString().slice(0, 10) : variable.dateMin ?? undefined}
             max={type === "number" ? variable.maxValue ?? undefined : variable.dateMax ?? undefined}
             step={type === "number" ? variable.onlyIntegers ? 1 : "any" : undefined}
             value={typeof value === "string" ? value : ""}
@@ -348,107 +409,178 @@ export function ServiceRequestsPage() {
     );
   };
 
-  return (
-    <div className="service-requests-page">
-      <header className="page-header">
-        <div className="page-header-left">
-          <div className="breadcrumb">Self Service</div>
-          <div className="page-title">Service Requests</div>
-          <div className="page-subtitle">Browse the service catalog and submit a request.</div>
-        </div>
-        <Link to="/service-requests/my-requests" className="btn-ghost" style={{ whiteSpace: "nowrap" }}>My Requests</Link>
-      </header>
+  const urgOptions = urgenciesQuery.data ?? [];
+  const impOptions = impactsQuery.data ?? [];
+  const urgName = urgOptions.find((u) => u.urgencyId === urgId)?.urgencyName;
+  const impName = impOptions.find((x) => x.serviceImpactId === impId)?.impactName;
+  const priorityName = selectedCatalog?.priority?.priorityName
+    ?? (urgId && impId
+      ? (matrixQuery.data ?? []).find((m) => m.isActive && m.urgencyId === urgId && m.serviceImpactId === impId)?.priority.priorityName
+      : undefined);
+  const days = Number(selectedCatalog?.deliveryTimeSla ?? selectedCatalog?.estimatedTime) || 0;
+  const catPath = selectedCatalog?.serviceCategory?.categoryName || selectedCatalog?.category?.categoryName || "Uncategorised";
+  const catalogItems = (catalogsQuery.data ?? []).filter((c) => (c.status ?? "published").toLowerCase() !== "draft" && c.isActive !== false);
+  const approvalSteps = (lifecycleQuery.data?.steps ?? []).filter((st) => st.stepType === "approval").sort((a, b) => a.stepOrder - b.stepOrder);
+  const needsApproval = !!selectedCatalog?.approvalRequired;
+  const path: { title: string; sub: string }[] = [];
+  if (needsApproval) {
+    const levels = approvalSteps.flatMap((st) => (st.approvalLevels ?? []).filter((l) => !l.autoApproval).map((l) => l.title || st.stepName));
+    (levels.length ? levels : approvalSteps.map((st) => st.stepName)).forEach((t) => path.push({ title: t, sub: "Approval" }));
+    if (!path.length) path.push({ title: selectedCatalog?.workflow?.workflowName ?? "Approval", sub: "Approval" });
+  }
+  path.push({ title: selectedCatalog?.fulfillmentGroup?.groupName || selectedCatalog?.assignmentGroup?.groupName || "Fulfilment team", sub: days ? `Fulfilled within ${days} business ${days > 1 ? "days" : "day"}` : "Fulfilment" });
+  path.push({ title: "Closed", sub: "You confirm the service was delivered" });
+  if (serverPath) {
+    path.length = 0;
+    serverPath.approvals.forEach((a) => path.push({ title: a.title, sub: `Approval by ${a.approver}${a.rule ? ` \u00b7 ${a.rule}` : ""}` }));
+    const dd = serverPath.deliveryDays;
+    path.push({ title: serverPath.fulfilmentGroup || "Fulfilment team", sub: dd ? `Fulfilled within ${dd} business ${dd > 1 ? "days" : "day"}` : "Fulfilment" });
+    path.push({ title: "Closed", sub: "You confirm the service was delivered" });
+  }
+  const hint = (txt?: string | null) => (txt ? <div className="sc-hint">{txt}</div> : null);
 
-      <div className="page-body service-requests-body">
-        {notice && <div className="service-request-notice" role="status">{notice}</div>}
-        {submitError && <ErrorBar msg={submitError} />}
-
-        <section className="card service-request-section">
-          <div className="service-request-section-heading">
-            <div>
-              <h2><ShoppingCart size={18} aria-hidden="true" /> {selectedCatalog ? "Submit a Request" : "Browse Services"}</h2>
-              <p>{selectedCatalog ? "Complete the required details below." : "Select a catalog item to get started."}</p>
+  if (done) {
+    const pending = done.status === "Pending Approval";
+    return (
+      <div className="sc-page">
+        <div className="sc-body" style={{ justifyContent: "center", paddingTop: 48 }}>
+          <div className="sc-panel sc-done">
+            <div className="sc-done-icon" aria-hidden="true">✓</div>
+            <div className="sc-done-title">Request {done.number} submitted</div>
+            <div className="sc-done-text">{pending ? "It is waiting for approval. You will be notified as soon as it is approved or rejected." : "No approval is needed, so it has gone straight to the fulfilment team."}</div>
+            <div className="sc-done-actions">
+              <Link to="/service-requests/my-requests" className="sc-btn primary">Track this request</Link>
+              {pending
+                ? <Link to="/service-requests/approvals" className="sc-btn">Open the approver view</Link>
+                : <Link to="/service-requests/queue" className="sc-btn">Open the fulfilment queue</Link>}
+              <Link to="/service-requests" className="sc-btn">Back to catalog</Link>
             </div>
-            {selectedCatalog && (
-              <button type="button" className="btn-ghost" onClick={() => setSelectedCatalogId(null)} disabled={submitting}>
-                <ArrowLeft size={15} /> Back to catalog
-              </button>
-            )}
           </div>
+        </div>
+      </div>
+    );
+  }
 
-          {catalogsQuery.loading && !catalogsQuery.data && <div className="spinner-row">Loading services…</div>}
-          {catalogsQuery.error && <><ErrorBar msg={catalogsQuery.error} /><button type="button" className="btn-ghost" onClick={catalogsQuery.reload}>Retry loading services</button></>}
-          {!selectedCatalogId && catalogsQuery.data && catalogsQuery.data.length === 0 && (
-            <div className="empty-state">There are no service catalog items available right now.</div>
-          )}
-          {!selectedCatalogId && catalogsQuery.data && catalogsQuery.data.length > 0 && (
-            <div className="service-request-catalog-browser">
-              <div className="service-request-catalog-filters">
-                <label className="service-request-search">
-                  <Search size={15} aria-hidden="true" />
-                  <input aria-label="Search service catalog" placeholder="Search services…" value={catalogSearch} onChange={(event) => setCatalogSearch(event.target.value)} />
-                </label>
-                <select className="select" aria-label="Sort services" value={catalogSort} onChange={(event) => setCatalogSort(event.target.value as typeof catalogSort)}>
-                  <option value="popular">Sort by: Popular</option>
-                  <option value="name">Sort by: Name A–Z</option>
-                  <option value="recent">Sort by: Recently added</option>
-                </select>
-              </div>
-              {catalogs.length === 0 ? <div className="empty-state">No matching services found.</div> : (
-                <div className="service-request-catalog-grid">
-                  {catalogs.map((catalog) => (
-                    <button
-                      type="button"
-                      className="service-request-catalog-card"
-                      key={catalog.catalogId}
-                      onClick={() => { setNotice(""); setSubmitError(""); setSelectedCatalogId(catalog.catalogId); }}
-                      style={catalog.tileColor ? { borderTopColor: catalog.tileColor } : undefined}
-                    >
-                      <span className="service-request-catalog-icon"><ShoppingCart size={18} aria-hidden="true" /></span>
-                      <strong>{catalog.catalogName}</strong>
-                      <span>{catalog.shortDescription || catalog.description || "Open this service request form."}</span>
-                      <small>{catalog.serviceCategory?.categoryName || catalog.category?.categoryName || "Uncategorized"}</small>
-                      {catalog.estimatedTime != null && <small><Clock3 size={13} aria-hidden="true" /> Estimated {catalog.estimatedTime} minutes</small>}
-                    </button>
-                  ))}
-                </div>
-              )}
+  const img = selectedCatalog?.bannerUrl || selectedCatalog?.iconUrl;
+  return (
+    <div className="sc-page">
+      <div className="sc-head">
+        <div className="sc-crumb">User &gt; <Link to="/service-requests">Service Catalog</Link> &gt; <span>{selectedCatalog?.catalogName ?? "…"}</span></div>
+        <div className="sc-head-row">
+          <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+            {img && <span aria-hidden="true" className="sc-thumb" style={{ backgroundImage: `url("${assetUrl(img)}")` }} />}
+            <div>
+              <h1>Request: {selectedCatalog?.catalogName ?? ""}</h1>
+              <div className="sc-sub">{selectedCatalog?.shortDescription || selectedCatalog?.description || "Complete the details below to submit your request."}</div>
             </div>
-          )}
+          </div>
+          <Link to="/service-requests" className="sc-btn">Cancel</Link>
+        </div>
+      </div>
 
-          {selectedCatalogId !== null && catalogLoading && <div className="spinner-row">Loading request form…</div>}
-          {selectedCatalogId !== null && catalogError && (
-            <div className="service-request-form-content">
-              <ErrorBar msg={catalogError} />
-              <button type="button" className="btn-ghost" onClick={() => setCatalogRetry((attempt) => attempt + 1)} disabled={catalogLoading}>Try again</button>
-            </div>
-          )}
-          {selectedCatalog && !catalogLoading && (
-            <form className="service-request-form-content" onSubmit={(event) => void submitRequest(event)}>
-              <div className="service-request-catalog-title">
-                <h3>{selectedCatalog.catalogName}</h3>
-                {selectedCatalog.description && <p>{selectedCatalog.description}</p>}
-              </div>
+      <div className="sc-body">
+        {submitError && <div style={{ flex: "1 1 100%" }}><ErrorBar msg={submitError} /></div>}
+        {catalogLoading && <div className="spinner-row" style={{ flex: "1 1 100%" }}>Loading request form…</div>}
+        {catalogError && (
+          <div style={{ flex: "1 1 100%" }}>
+            <ErrorBar msg={catalogError} />
+            <button type="button" className="sc-btn" onClick={() => setCatalogRetry((n) => n + 1)} disabled={catalogLoading}>Try again</button>
+          </div>
+        )}
+        {selectedCatalog && !catalogLoading && (
+          <form className="sc-form-wrap" onSubmit={(event) => void submitRequest(event)}>
+            <div className="sc-panel sc-form-main service-request-form-content">
               {lookupError && <ErrorBar msg={lookupError} />}
               {groupsQuery.error && hasGroupLookup && <ErrorBar msg={groupsQuery.error} />}
-              {sections.map(([name, sectionVariables]) => (
-                <fieldset className="service-request-form-section" key={name}>
-                  <legend>{name}</legend>
-                  <div className={`service-request-fields ${selectedCatalog.formLayout === "two-column" ? "two-column" : ""}`}>
-                    {sectionVariables.map(renderVariable)}
+              {pages.length > 1 && (
+                <div className="rf-pages" aria-label="Form pages">
+                  {pages.map((pg, i) => <span key={i} className={`rf-page-pill ${i === pageIdx ? "active" : ""}`} aria-current={i === pageIdx ? "step" : undefined}>{i + 1}. {pageTitle(pg, i)}</span>)}
+                </div>
+              )}
+              {(pages[pageIdx] ?? []).map((sec) => (
+                <fieldset className="service-request-form-section" key={sec.key}>
+                  {sections.length > 1 && <legend>{sec.name}</legend>}
+                  <div className={`service-request-fields ${sec.cols ? "cols" : selectedCatalog.formLayout === "two-column" ? "two-column" : ""}`} style={sec.cols ? ({ "--cols": sec.cols } as React.CSSProperties) : undefined}>
+                    {sec.vars.map(renderVariable)}
                   </div>
                 </fieldset>
               ))}
-              <div className="service-request-form-actions">
-                <button type="button" className="btn-ghost" onClick={() => setSelectedCatalogId(null)} disabled={submitting}>Cancel</button>
-                <button type="submit" className="btn-primary" disabled={submitting || groupsQuery.loading}>
-                  {submitting ? "Submitting…" : "Submit Request"}
-                </button>
+              {lastPage && (<>
+              <div className="service-request-field">
+                <label className="lbl" htmlFor="rf-for">Requested for</label>
+                <select id="rf-for" className="select" value={forOther ? "other" : "me"} onChange={(e) => { const other = e.target.value === "other"; setForOther(other); if (!other) { setForUser(null); setForQuery(""); } }}>
+                  <option value="me">Myself{me?.name ? ` (${me.name})` : ""}</option>
+                  <option value="other">Someone else</option>
+                </select>
+                {forOther && (forUser
+                  ? <div className="sr-members"><span className="sr-member">{forUser.name}<button type="button" aria-label="Clear person" onClick={() => setForUser(null)}>x</button></span></div>
+                  : <div style={{ position: "relative" }}>
+                    <input className="input" placeholder="Search people by name or e-mail..." aria-label="Search people" value={forQuery} onChange={(e) => setForQuery(e.target.value)} />
+                    {forFound.length > 0 && <div className="sr-suggest">{forFound.map((u) => <button key={u.userId} type="button" onClick={() => { setForUser({ id: u.userId, name: u.fullName }); setForQuery(""); setForFound([]); }}>{u.fullName}{u.email ? ` \u00b7 ${u.email}` : ""}</button>)}</div>}
+                  </div>)}
+                {hint(forOther ? "They become the requester and get the updates. You are recorded as the person who submitted it." : null)}
               </div>
-            </form>
-          )}
-        </section>
+              <div className="service-request-field">
+                <label className="lbl" htmlFor="rf-urg">Urgency</label>
+                <select id="rf-urg" className="select" value={urgId ?? ""} onChange={(e) => setUrgId(e.target.value ? Number(e.target.value) : null)}>
+                  {!urgId && <option value="">Select…</option>}
+                  {urgOptions.map((u) => <option key={u.urgencyId} value={u.urgencyId}>{u.urgencyName}</option>)}
+                </select>
+                {hint("How soon you need this. It sets the delivery priority together with impact.")}
+              </div>
+              <div className="service-request-field">
+                <label className="lbl" htmlFor="rf-imp">Impact</label>
+                <select id="rf-imp" className="select" value={impId ?? ""} onChange={(e) => setImpId(e.target.value ? Number(e.target.value) : null)}>
+                  {!impId && <option value="">Select…</option>}
+                  {impOptions.map((x) => <option key={x.serviceImpactId} value={x.serviceImpactId}>{x.impactName}</option>)}
+                </select>
+                {hint("How many people or how much work is affected if this is not delivered.")}
+              </div>
+              <div className="service-request-field">
+                <label className="lbl" htmlFor="rf-notes">Additional notes (optional)</label>
+                <textarea id="rf-notes" className="textarea" maxLength={2000} placeholder="Anything else the approver or fulfilment team should know…" value={notes} onChange={(e) => setNotes(e.target.value)} />
+              </div>
+              </>)}
+              {pages.length > 1 && (
+                <div className="rf-page-nav">
+                  <button type="button" className="sc-btn" disabled={pageIdx === 0} onClick={() => setPage(Math.max(0, pageIdx - 1))}>Back</button>
+                  <span className="sc-hint">{lastPage ? "Last page. Submit from the summary panel." : pageMissing > 0 ? "Complete the required fields to continue." : "Continue to the next page."}</span>
+                  <button type="button" className="sc-btn primary" disabled={lastPage || pageMissing > 0} onClick={() => setPage(Math.min(pages.length - 1, pageIdx + 1))}>Next</button>
+                </div>
+              )}
+            </div>
 
+            <div className="sc-side">
+              <div className="sc-panel sc-sidepanel">
+                <div className="sc-eyebrow">Request summary</div>
+                <label className="lbl" htmlFor="rf-item" style={{ marginTop: 10 }}>Service</label>
+                <select id="rf-item" className="select" value={selectedCatalogId ?? ""} disabled={submitting} onChange={(e) => navigate(`/service-requests/request/${e.target.value}`)}>
+                  {catalogItems.map((c) => <option key={c.catalogId} value={c.catalogId}>{c.catalogName}</option>)}
+                </select>
+                <div className="sc-kv"><span>Category</span><b>{catPath}</b></div>
+                {forOther && forUser && <div className="sc-kv"><span>Requested for</span><b>{forUser.name}</b></div>}
+                <div className="sc-kv"><span>Est. cost</span><b>{selectedCatalog.hidePrice ? "—" : Number(selectedCatalog.estimatedCost) ? money(selectedCatalog.estimatedCost) : "No cost"}</b></div>
+                <div className="sc-kv"><span>Delivery target</span><b>{days ? `${days} business ${days > 1 ? "days" : "day"}` : "—"}</b></div>
+                <div className="sc-kv"><span>Priority</span>{priorityName ? <span className="pill blue">{priorityName}</span> : <b>—</b>}</div>
+                <div className="sc-hint">{urgName && impName ? `Set from ${urgName} urgency and ${impName} impact.` : "Choose urgency and impact to see the priority."}</div>
+              </div>
+
+              <div className="sc-panel sc-sidepanel">
+                <div className="sc-eyebrow">What happens next</div>
+                {serverPath && <div className="sc-hint" style={{ marginBottom: 6 }}>This path depends on your answers and updates as you fill in the form.</div>}
+                <ol className="sc-path">
+                  {path.map((st, i) => (
+                    <li key={i}><span className="sc-num">{i + 1}</span><div><div className="sc-path-title">{st.title}</div><div className="sc-hint" style={{ marginTop: 1 }}>{st.sub}</div></div></li>
+                  ))}
+                </ol>
+              </div>
+
+              <button type="submit" className="sc-btn primary" style={{ width: "100%", height: 40 }} disabled={submitting || groupsQuery.loading || !lastPage}>
+                {submitting ? "Submitting…" : "Submit request"}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

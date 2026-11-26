@@ -38,7 +38,7 @@ const configurationSections = [
     ],
   },
   {
-    label: "SLA Configurations",
+    label: "Incident SLA Configurations",
     items: [
       { label: "Impact", href: "/admin/impact" },
       { label: "Priority", href: "/admin/priority" },
@@ -51,8 +51,17 @@ const configurationSections = [
     label: "Service Request Masters",
     items: [
       { label: "Service Categories", href: "/admin/service-category" },
-      { label: "Service Impact", href: "/admin/service-impact" },
       { label: "Service Completion", href: "/admin/service-completion" },
+    ],
+  },
+  {
+    label: "Service SLA Configurations",
+    items: [
+      { label: "Service Impact", href: "/admin/service-impact" },
+      { label: "Service Priority", href: "/admin/service-priority" },
+      { label: "Service Urgency", href: "/admin/service-urgency" },
+      { label: "Service SLA Window", href: "/admin/request-sla-service-window" },
+      { label: "Service Pending Reasons", href: "/admin/request-pending-reason" },
     ],
   },
   {
@@ -125,7 +134,7 @@ function NavItem({ href, label, collapsed, onClick }: NavItemProps) {
         collapsed ? "justify-center px-2" : "",
         isActive
           ? "border-brand-600 bg-brand-100 font-bold text-brand-600"
-          : "text-[#344054] hover:bg-brand-50 hover:text-[#1d2433]"
+          : "text-[#101828] font-medium hover:bg-brand-50 hover:text-black"
       )}
     >
       {!collapsed && <span className="truncate">{label}</span>}
@@ -171,8 +180,8 @@ function Section({ section, collapsed, onNavigate }: SectionProps) {
         className={cn(
           "flex items-center gap-2 border-t border-[#edeff2] px-3 py-3 text-[10.5px] font-extrabold uppercase tracking-[0.6px] transition-all duration-150",
           hasActiveItem
-            ? "text-brand-600"
-            : "text-[#8a94a6] hover:bg-brand-50 hover:text-[#344054]"
+            ? "text-brand-600 font-black"
+            : "text-[#101828] font-black hover:bg-brand-50 hover:text-black"
         )}
       >
         <Icon className="size-4 shrink-0" />
@@ -199,7 +208,7 @@ function Section({ section, collapsed, onNavigate }: SectionProps) {
 
           {section.subsections?.map((subsection) => (
             <div key={subsection.label} className="mt-2">
-              <p className="px-3 py-1 text-[10.5px] font-bold uppercase tracking-[0.5px] text-[#475467]">
+              <p className="px-3 py-1 text-[11px] font-black uppercase tracking-[0.6px] text-[#101828]">
                 {subsection.label}
               </p>
               {subsection.items.map((item) => (

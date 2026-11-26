@@ -1,5 +1,5 @@
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
-const BASE_URL = rawApiUrl && rawApiUrl.length > 0 ? rawApiUrl : "http://50.6.45.238:4000";
+const BASE_URL = rawApiUrl && rawApiUrl.length > 0 ? rawApiUrl : "/api";
 
 /**
  * Resolves a persisted-upload path (e.g. "/uploads/xyz.png", as returned by

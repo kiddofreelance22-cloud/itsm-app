@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { JwtService } from "@nestjs/jwt";
@@ -7,11 +7,14 @@ import { User } from "../users/entities/user.entity";
 import { RolesService } from "../roles/roles.service";
 import { AuthResponseDto } from "./dto/auth-response.dto";
 import { DirectoryService } from "../itsm-config/directory.service";
+import { UserImpersonation } from "./entities/user-impersonation.entity";
+import { randomUUID } from "crypto";
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(User) private usersRepo: Repository<User>,
+    @InjectRepository(UserImpersonation) private impersonations: Repository<UserImpersonation>,
     private rolesService: RolesService,
     private jwtService: JwtService,
     private directory: DirectoryService,
@@ -51,7 +54,10 @@ export class AuthService {
 
   /** Called by AuthController after LocalAuthGuard confirms credentials. Issues the JWT. */
   private normalizeRoles(roles: string[]): string[] {
-    return roles.map((role) => (role === "Administrator" ? "Admin" : role));
+    return roles.map((role) => {
+      const normalized = role.trim().toLowerCase();
+      return normalized === "admin" || normalized === "administrator" ? "Admin" : role.trim();
+    });
   }
 
   async login(user: Omit<User, "passwordHash">): Promise<AuthResponseDto> {
@@ -75,12 +81,115 @@ export class AuthService {
         username: user.username,
         email: user.email,
         fullName: user.fullName,
+        profilePhotoUrl: user.profilePhotoUrl,
         phone: user.phone,
         roles,
         permissions,
         isFirstLogin: (user as any).isTempPassword ?? false,
       },
     };
+  }
+
+  async switchUser(
+    actor: { userId: number; roles: string[]; impersonatedBy?: unknown },
+    targetUserId: number,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AuthResponseDto> {
+    if (actor.impersonatedBy || !actor.roles.some((role) => ["admin", "administrator"].includes(role.trim().toLowerCase()))) {
+      throw new ForbiddenException("Only a signed-in administrator can start a support session.");
+    }
+    const admin = await this.validateJwtUser(actor.userId);
+    const target = await this.usersRepo.findOne({ where: { userId: targetUserId } });
+    if (!target || !target.isActive) throw new NotFoundException("Active user not found.");
+    if (target.userId === admin.userId) throw new ForbiddenException("You are already signed in as this user.");
+
+    const roles = this.normalizeRoles(await this.rolesService.getRoleNamesForUser(target.userId));
+    const permissions = await this.rolesService.getPermissionsForUser(target.userId);
+    const sessionId = randomUUID();
+    const actingAs = { userId: admin.userId, fullName: admin.fullName };
+    await this.impersonations.save(this.impersonations.create({
+      actorUserId: admin.userId,
+      targetUserId: target.userId,
+      sessionId,
+      ipAddress: ipAddress?.slice(0, 64) ?? null,
+      userAgent: userAgent?.slice(0, 500) ?? null,
+      endedAt: null,
+    }));
+
+    const expiresAt = Date.now() + 1800 * 1000;
+    return {
+      impersonationId: sessionId,
+      expiresAt,
+      accessToken: this.jwtService.sign({
+        sub: target.userId,
+        username: target.username,
+        roles,
+        permissions,
+        impersonatedBy: actingAs,
+        impersonationId: sessionId,
+      }, { expiresIn: 1800 }),
+      user: {
+        userId: target.userId,
+        username: target.username,
+        email: target.email,
+        fullName: target.fullName,
+        profilePhotoUrl: target.profilePhotoUrl,
+        phone: target.phone,
+        roles,
+        permissions,
+        impersonatedBy: actingAs,
+      },
+    };
+  }
+
+  async extendImpersonation(targetUserId: number, sessionId: string): Promise<AuthResponseDto & { expiresAt: number }> {
+    const session = await this.impersonations.findOne({ where: { sessionId } });
+    if (!session || session.targetUserId !== targetUserId || session.endedAt) {
+      throw new ForbiddenException("The support session could not be verified.");
+    }
+    if (session.actorUserId === null) {
+      throw new ForbiddenException("The original administrator session could not be verified.");
+    }
+    const target = await this.validateJwtUser(targetUserId);
+    const roles = this.normalizeRoles(await this.rolesService.getRoleNamesForUser(target.userId));
+    const permissions = await this.rolesService.getPermissionsForUser(target.userId);
+    const actingAs = { userId: session.actorUserId, fullName: (await this.validateJwtUser(session.actorUserId)).fullName };
+    const expiresAt = Date.now() + 1800 * 1000;
+    return {
+      impersonationId: sessionId,
+      expiresAt,
+      accessToken: this.jwtService.sign({
+        sub: target.userId,
+        username: target.username,
+        roles,
+        permissions,
+        impersonatedBy: actingAs,
+        impersonationId: sessionId,
+      }, { expiresIn: 1800 }),
+      user: {
+        userId: target.userId,
+        username: target.username,
+        email: target.email,
+        fullName: target.fullName,
+        profilePhotoUrl: target.profilePhotoUrl,
+        phone: target.phone,
+        roles,
+        permissions,
+        impersonatedBy: actingAs,
+      },
+    };
+  }
+
+  async endImpersonation(actorUserId: number, sessionId: string): Promise<void> {
+    const session = await this.impersonations.findOne({ where: { sessionId } });
+    if (!session || session.actorUserId !== actorUserId) {
+      throw new ForbiddenException("The support session could not be verified.");
+    }
+    if (!session.endedAt) {
+      session.endedAt = new Date();
+      await this.impersonations.save(session);
+    }
   }
 
   /**

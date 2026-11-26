@@ -83,6 +83,7 @@ export const feedbackApi = {
 // ── work orders ──
 export interface WorkOrderRow {
   workOrderId: number; woNumber: string; title: string; notes: string; incidentId: string | null; incidentRef: string | null;
+  requestNumber: string | null;
   groupId: number | null; workgroup: string; assignedToId: number | null; assignedTo: string; priority: string; status: string;
   isActive: boolean; createdAt: string;
 }

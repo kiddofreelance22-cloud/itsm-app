@@ -55,6 +55,9 @@ export class CatalogVariablesService {
       allowedFileTypes: dto.allowedFileTypes,
       maxFileSizeMb: dto.maxFileSizeMb,
       lookupSource: dto.lookupSource,
+      onlyIntegers: dto.onlyIntegers ?? false,
+      maxLength: dto.maxLength,
+      noPastDates: dto.noPastDates ?? false,
     });
     const saved = await this.variablesRepo.save(variable);
 

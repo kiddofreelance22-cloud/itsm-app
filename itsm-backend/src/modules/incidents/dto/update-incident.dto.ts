@@ -1,11 +1,13 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsInt, IsOptional, IsString, Max, Min } from "class-validator";
+import { IsInt, IsOptional, IsString, Max, Min, Matches } from "class-validator";
 
 export class UpdateIncidentDto {
   @ApiPropertyOptional() @IsOptional() @IsString() title?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
   @ApiPropertyOptional({ description: "Priority name — any value configured in Admin > Priority" })
   @IsOptional() @IsString() priority?: string;
+  @ApiPropertyOptional({ description: "Mandatory justification when Priority is overridden away from the Impact × Urgency result" })
+  @IsOptional() @IsString() priorityOverrideReason?: string;
   @ApiPropertyOptional({ description: "Impact level — any value configured in Admin > Impact" })
   @IsOptional() @IsString() impact?: string;
   @ApiPropertyOptional({ description: "Urgency level — any value configured in Admin > Urgency" })
@@ -20,7 +22,7 @@ export class UpdateIncidentDto {
   @ApiPropertyOptional({ description: "SLA Service Window the Response/Resolution clocks follow; null = use the workgroup's window" }) @IsOptional() @IsInt() slaServiceWindowId?: number | null;
   @ApiPropertyOptional() @IsOptional() @IsString() affectedAsset?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() businessService?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() contactNumber?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @Matches(/^\+?[0-9][0-9 ()-]{5,18}$/, { message: "Contact Number must be a valid phone number (digits, spaces, + ( ) - only; 6-20 characters)." }) contactNumber?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() department?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() resolutionNotes?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsString() closureCode?: string | null;

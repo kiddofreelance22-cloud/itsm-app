@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useAsync } from "../hooks";
 import { allNavSections } from "../components/navConfig";
 import { ErrorBar, Eyebrow, PageHeader, SearchBox, StatusPill, TH, errMsg } from "../components/configKit";
+import { slaApi } from "../configApi";
 
 type Raw = Record<string, any>;
 const DAYS = [{ n: 1, l: "Mon" }, { n: 2, l: "Tue" }, { n: 3, l: "Wed" }, { n: 4, l: "Thu" }, { n: 5, l: "Fri" }, { n: 6, l: "Sat" }, { n: 7, l: "Sun" }];
@@ -25,6 +26,8 @@ function daysSummary(days: { day: number; enabled: boolean }[] = []): string {
 // ───────────────────────── SLA Service Window ─────────────────────────
 export function SlaServiceWindowPage() {
   const { data, loading, error, reload } = useAsync(() => api.get<Raw[]>("/sla-service-windows"), []);
+  const groups = useAsync(() => slaApi.windows(), []);
+  const [picked, setPicked] = useState<number[]>([]);
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<"new" | Raw | null>(null);
   const [form, setForm] = useState({ name: "", description: "", days: [1, 2, 3, 4, 5] as number[], start: "09:00", end: "18:00", zone: "UTC", order: 1, active: true });
@@ -34,12 +37,12 @@ export function SlaServiceWindowPage() {
   const items = useMemo(() => [...(data ?? [])].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.slaServiceWindowId - b.slaServiceWindowId), [data]);
   const filtered = items.filter((i) => !query.trim() || String(i.slaName).toLowerCase().includes(query.trim().toLowerCase()));
 
-  const openAdd = () => { setForm({ name: "", description: "", days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00", zone: "UTC", order: items.length + 1, active: true }); setFormError(""); setEditing("new"); };
+  const openAdd = () => { setForm({ name: "", description: "", days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00", zone: "UTC", order: items.length + 1, active: true }); setFormError(""); setPicked([]); setEditing("new"); };
   const openEdit = (i: Raw) => {
     const on = (i.serviceWindow ?? []).filter((d: Raw) => d.enabled);
     setForm({ name: i.slaName, description: i.description ?? "", days: on.map((d: Raw) => d.day), start: on[0]?.from ?? "09:00", end: on[0]?.to ?? "18:00",
       zone: ZONES.includes(i.timeZone) ? i.timeZone : i.timeZone || "UTC", order: i.displayOrder ?? 0, active: i.isActive !== false });
-    setFormError(""); setEditing(i);
+    setFormError(""); setPicked((groups.data ?? []).filter((g) => g.slaServiceWindowId === i.slaServiceWindowId).map((g) => g.groupId)); setEditing(i);
   };
 
   const save = async (e: React.FormEvent) => {
@@ -53,14 +56,22 @@ export function SlaServiceWindowPage() {
       serviceWindow: DAYS.map((d) => ({ day: d.n, enabled: form.days.includes(d.n), from: form.start, to: form.end })),
     };
     try {
-      if (editing === "new") await api.post("/sla-service-windows", body);
-      else if (editing) await api.patch(`/sla-service-windows/${editing.slaServiceWindowId}`, body);
+      let windowId: number | null = null;
+      if (editing === "new") windowId = (await api.post<Raw>("/sla-service-windows", body)).slaServiceWindowId ?? null;
+      else if (editing) { await api.patch(`/sla-service-windows/${editing.slaServiceWindowId}`, body); windowId = editing.slaServiceWindowId; }
+      if (windowId != null) {
+        // A workgroup uses one window at a time: ticking it moves it here, unticking leaves it with none.
+        const before = (groups.data ?? []).filter((g) => g.slaServiceWindowId === windowId).map((g) => g.groupId);
+        for (const gid of picked.filter((x) => !before.includes(x))) await slaApi.setWindow(gid, { slaServiceWindowId: windowId });
+        for (const gid of before.filter((x) => !picked.includes(x))) await slaApi.setWindow(gid, { slaServiceWindowId: null });
+        groups.reload();
+      }
       setEditing(null); reload();
     } catch (err) { setFormError(errMsg(err, "Unable to save.")); }
     finally { setSaving(false); }
   };
 
-  const crumb = "Configuration > SLA Configurations > SLA Service Window";
+  const crumb = "Configuration > Incident SLA Configurations > SLA Service Window";
   const subtitle = "Define named business-hour calendars (days, times, timezone) that can be assigned to workgroups to control when the SLA clock runs.";
 
   if (editing) {
@@ -94,6 +105,21 @@ export function SlaServiceWindowPage() {
               <label className="field-group"><span className="lbl">Timezone</span>
                 <select className="select" value={form.zone} onChange={(e) => setForm({ ...form, zone: e.target.value })}>
                   {[...new Set([...ZONES, form.zone])].map((z) => <option key={z}>{z}</option>)}</select></label>
+              <div className="field-group admin-master-wide"><span className="lbl">Workgroups on this window</span>
+                <div style={{ border: "1px solid #E4E7EC", borderRadius: 8, padding: "8px 12px", maxHeight: 190, overflowY: "auto", display: "grid", gap: 4 }}>
+                  {(groups.data ?? []).length === 0 && <span style={{ fontSize: 12.5, color: "var(--muted)" }}>No workgroups yet.</span>}
+                  {(groups.data ?? []).map((g) => {
+                    const here = editing && editing !== "new" ? g.slaServiceWindowId === editing.slaServiceWindowId : false;
+                    const other = g.slaServiceWindowId != null && !here ? items.find((w) => w.slaServiceWindowId === g.slaServiceWindowId)?.slaName : null;
+                    return (
+                      <label key={g.groupId} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>
+                        <input type="checkbox" checked={picked.includes(g.groupId)} onChange={(e) => setPicked(e.target.checked ? [...picked, g.groupId] : picked.filter((x) => x !== g.groupId))} />
+                        {g.workgroupName}
+                        {other && <span style={{ fontSize: 12, color: picked.includes(g.groupId) ? "#B54708" : "var(--muted)" }}>{picked.includes(g.groupId) ? `moves from ${other}` : `on ${other}`}</span>}
+                      </label>);
+                  })}
+                </div>
+                <span style={{ fontSize: 12.5, color: "var(--muted)" }}>A workgroup uses one window at a time, so ticking it here moves it off its current window.</span></div>
               <label className="field-group"><span className="lbl">Display Order</span>
                 <input className="input" type="number" min={0} value={form.order} onChange={(e) => setForm({ ...form, order: Number(e.target.value) })} /></label>
               <div className="field-group"><span className="lbl">Status</span>
@@ -123,7 +149,7 @@ export function SlaServiceWindowPage() {
           ) : (
             <div style={{ padding: "0 20px 20px" }}>
               <table>
-                <thead><tr><th style={{ width: 44 }} /><th style={TH}>Service Window</th><th style={{ ...TH, width: 160 }}>Days</th><th style={{ ...TH, width: 200 }}>Time</th><th style={{ ...TH, width: 110 }}>Status</th><th style={{ width: 44 }} /></tr></thead>
+                <thead><tr><th style={{ width: 44 }} /><th style={TH}>Service Window</th><th style={{ ...TH, width: 160 }}>Days</th><th style={{ ...TH, width: 200 }}>Time</th><th style={{ ...TH, width: 200 }}>Workgroups</th><th style={{ ...TH, width: 110 }}>Status</th><th style={{ width: 44 }} /></tr></thead>
                 <tbody>
                   {filtered.map((i) => {
                     const first = (i.serviceWindow ?? []).find((d: Raw) => d.enabled);
@@ -133,6 +159,146 @@ export function SlaServiceWindowPage() {
                         <td><div style={{ fontWeight: 600, fontSize: 13 }}>{i.slaName}</div>{i.description && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{i.description}</div>}</td>
                         <td style={{ fontSize: 12.5 }}>{daysSummary(i.serviceWindow)}</td>
                         <td style={{ fontSize: 12.5 }}>{first ? `${first.from} – ${first.to} ${i.timeZone}` : "—"}</td>
+                        <td style={{ fontSize: 12.5 }}>{(() => { const on = (groups.data ?? []).filter((g) => g.slaServiceWindowId === i.slaServiceWindowId); return on.length ? <>{on.length}<span style={{ color: "var(--muted)" }}> {"\u00b7"} {on.map((g) => g.workgroupName).join(", ")}</span></> : <span style={{ color: "var(--muted)" }}>None</span>; })()}</td>
+                        <td><StatusPill active={i.isActive !== false} /></td>
+                        <td className="admin-master-actions"><button className="admin-master-icon-button" aria-label={`Edit ${i.slaName}`} onClick={() => openEdit(i)}><Pencil size={15} aria-hidden="true" /></button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ───────────────────────── Request SLA Service Window (Service Requests) ─────────────────────────
+export function RequestSlaServiceWindowPage() {
+  const { data, loading, error, reload } = useAsync(() => api.get<Raw[]>("/request-sla-service-windows"), []);
+  const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState<"new" | Raw | null>(null);
+  const [form, setForm] = useState({ name: "", description: "", days: [1, 2, 3, 4, 5] as number[], start: "09:00", end: "18:00", zone: "UTC", order: 1, is24x7: false, isDefault: false, active: true });
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+
+  const items = useMemo(() => [...(data ?? [])].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.slaServiceWindowId - b.slaServiceWindowId), [data]);
+  const filtered = items.filter((i) => !query.trim() || String(i.slaName).toLowerCase().includes(query.trim().toLowerCase()));
+
+  const openAdd = () => { setForm({ name: "", description: "", days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00", zone: "UTC", order: items.length + 1, is24x7: false, isDefault: false, active: true }); setFormError(""); setEditing("new"); };
+  const openEdit = (i: Raw) => {
+    const on = (i.serviceWindow ?? []).filter((d: Raw) => d.enabled);
+    setForm({ name: i.slaName, description: i.description ?? "", days: on.map((d: Raw) => d.day), start: on[0]?.from ?? "09:00", end: on[0]?.to ?? "18:00",
+      zone: ZONES.includes(i.timeZone) ? i.timeZone : i.timeZone || "UTC", order: i.displayOrder ?? 0, is24x7: !!i.is24x7, isDefault: !!i.isDefault, active: i.isActive !== false });
+    setFormError(""); setEditing(i);
+  };
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim()) { setFormError("Service Window Name is required."); return; }
+    if (!form.is24x7 && !form.days.length) { setFormError("Pick at least one active day."); return; }
+    if (!form.is24x7 && form.end <= form.start) { setFormError("End Time must be after Start Time."); return; }
+    setSaving(true); setFormError("");
+    const body = {
+      slaName: form.name.trim(), description: form.description.trim() || null, timeZone: form.zone, displayOrder: Number(form.order) || 0,
+      is24x7: form.is24x7, isDefault: form.isDefault, isActive: form.active,
+      serviceWindow: DAYS.map((d) => ({ day: d.n, enabled: form.days.includes(d.n), from: form.start, to: form.end })),
+    };
+    try {
+      if (editing === "new") await api.post<Raw>("/request-sla-service-windows", body);
+      else if (editing) await api.patch(`/request-sla-service-windows/${editing.slaServiceWindowId}`, body);
+      setEditing(null); reload();
+    } catch (err) { setFormError(errMsg(err, "Unable to save.")); }
+    finally { setSaving(false); }
+  };
+
+  const crumb = "Configuration > Service SLA Configurations > Service SLA Window";
+  const subtitle = "Define named business-hour calendars (days, times, timezone) used for calculating Service Request delivery SLA targets. Separate from incident SLA service windows.";
+
+  if (editing) {
+    return (
+      <>
+        <PageHeader crumb={crumb} title="Service Request SLA Window" subtitle={subtitle} />
+        <div className="page-body">
+          <form className="card admin-master-form-panel" onSubmit={save}>
+            <div className="admin-master-form-heading">
+              <h2>{editing === "new" ? "Add Service Window" : "Edit Service Window"}</h2>
+              <button type="button" className="btn-ghost" onClick={() => setEditing(null)}>← Back to Service Windows</button>
+            </div>
+            <ErrorBar msg={formError} />
+            <div className="admin-master-form-grid">
+              <label className="field-group admin-master-wide"><span className="lbl">Service Window Name <span className="req">*</span></span>
+                <input className="input" value={form.name} maxLength={150} autoFocus onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+              <label className="field-group admin-master-wide"><span className="lbl">Description</span>
+                <textarea className="textarea" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
+              <div className="field-group admin-master-wide">
+                <label className="admin-master-check-label">
+                  <input type="checkbox" checked={form.is24x7} onChange={(e) => setForm({ ...form, is24x7: e.target.checked })} /> <strong>24x7 Window (always running, no calendar pauses)</strong>
+                </label>
+              </div>
+              {!form.is24x7 && (
+                <>
+                  <div className="field-group admin-master-wide"><span className="lbl">Days Active</span>
+                    <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                      {DAYS.map((d) => (
+                        <label key={d.n} className="admin-master-check-label">
+                          <input type="checkbox" checked={form.days.includes(d.n)} onChange={(e) => setForm({ ...form, days: e.target.checked ? [...form.days, d.n] : form.days.filter((x) => x !== d.n) })} /> {d.l}
+                        </label>
+                      ))}
+                    </div></div>
+                  <label className="field-group"><span className="lbl">Start Time</span>
+                    <input className="input" type="time" value={form.start} onChange={(e) => setForm({ ...form, start: e.target.value })} /></label>
+                  <label className="field-group"><span className="lbl">End Time</span>
+                    <input className="input" type="time" value={form.end} onChange={(e) => setForm({ ...form, end: e.target.value })} /></label>
+                </>
+              )}
+              <label className="field-group"><span className="lbl">Timezone</span>
+                <select className="select" value={form.zone} onChange={(e) => setForm({ ...form, zone: e.target.value })}>
+                  {[...new Set([...ZONES, form.zone])].map((z) => <option key={z}>{z}</option>)}</select></label>
+              <label className="field-group"><span className="lbl">Display Order</span>
+                <input className="input" type="number" min={0} value={form.order} onChange={(e) => setForm({ ...form, order: Number(e.target.value) })} /></label>
+              <div className="field-group"><span className="lbl">Default</span>
+                <span className="admin-master-check-label"><input type="checkbox" checked={form.isDefault} onChange={(e) => setForm({ ...form, isDefault: e.target.checked })} /> Default for requests without a specific SLA</span></div>
+              <div className="field-group"><span className="lbl">Status</span>
+                <span className="admin-master-check-label"><input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} /> Active</span></div>
+            </div>
+            <div className="admin-master-form-actions">
+              <button type="button" className="btn-ghost" onClick={() => setEditing(null)}>Cancel</button>
+              <button type="submit" className="btn-primary" disabled={saving}>{saving ? "Saving…" : "Save Changes"}</button>
+            </div>
+          </form>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PageHeader crumb={crumb} title="Service Request SLA Window" subtitle={subtitle} />
+      <div className="page-body">
+        <ErrorBar msg={error ?? ""} />
+        <div className="card admin-master-table-wrap">
+          <Eyebrow title={<>Service Request SLA Windows ( {loading ? "…" : items.length} )</>}
+            action={<button className="btn-primary admin-master-add" onClick={openAdd}><Plus size={15} aria-hidden="true" /> Add Service Window</button>} />
+          <div style={{ padding: "0 20px 14px" }}><SearchBox value={query} onChange={setQuery} placeholder="Search service windows…" /></div>
+          {loading ? <div className="spinner-row">Loading…</div> : filtered.length === 0 ? (
+            <div className="empty-state">{query ? `No service windows match "${query}".` : "No service windows yet."}</div>
+          ) : (
+            <div style={{ padding: "0 20px 20px" }}>
+              <table>
+                <thead><tr><th style={{ width: 44 }} /><th style={TH}>Service Window</th><th style={{ ...TH, width: 160 }}>Days</th><th style={{ ...TH, width: 200 }}>Time</th><th style={{ ...TH, width: 100 }}>Default</th><th style={{ ...TH, width: 110 }}>Status</th><th style={{ width: 44 }} /></tr></thead>
+                <tbody>
+                  {filtered.map((i) => {
+                    const first = (i.serviceWindow ?? []).find((d: Raw) => d.enabled);
+                    return (
+                      <tr key={i.slaServiceWindowId}>
+                        <td style={{ verticalAlign: "top", paddingTop: 14 }}><div className="numbered-badge">{i.displayOrder ?? 0}</div></td>
+                        <td><div style={{ fontWeight: 600, fontSize: 13 }}>{i.slaName}</div>{i.description && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{i.description}</div>}</td>
+                        <td style={{ fontSize: 12.5 }}>{i.is24x7 ? "24x7 (All days)" : daysSummary(i.serviceWindow)}</td>
+                        <td style={{ fontSize: 12.5 }}>{i.is24x7 ? `Continuous (${i.timeZone})` : first ? `${first.from} – ${first.to} ${i.timeZone}` : "—"}</td>
+                        <td style={{ fontSize: 12.5 }}>{i.isDefault ? <span className="pill pill-blue">Default</span> : "—"}</td>
                         <td><StatusPill active={i.isActive !== false} /></td>
                         <td className="admin-master-actions"><button className="admin-master-icon-button" aria-label={`Edit ${i.slaName}`} onClick={() => openEdit(i)}><Pencil size={15} aria-hidden="true" /></button></td>
                       </tr>
@@ -184,7 +350,7 @@ export function RolesPage() {
     if (r === "new") { setForm({ name: "", description: "", order: items.length + 1, active: true }); setPerm(base); return; }
     setForm({ name: r.roleName, description: r.description ?? "", order: r.displayOrder ?? 0, active: r.isActive !== false });
     setPerm(base);
-    try { const rows = await api.get<NavRow[]>(`/roles/${r.roleId}/navigation`); const m = { ...base }; rows.forEach((x) => { if (m[x.navKey]) m[x.navKey] = x; }); setPerm(m); } catch { /* start empty */ }
+    try { const rows = await api.get<NavRow[]>(`/roles/${r.roleId}/navigation`); const m = { ...base }; rows.forEach((x) => { if (m[x.navKey]) m[x.navKey] = { navKey: x.navKey, visible: !!x.visible, canCreate: !!x.canCreate }; }); setPerm(m); } catch { /* start empty */ }
   };
 
   const setRow = (key: string, patch: Partial<NavRow>) => setPerm((p) => {
@@ -204,7 +370,7 @@ export function RolesPage() {
     try {
       const body = { roleName: form.name.trim(), description: form.description.trim() || undefined, displayOrder: Number(form.order) || 0, isActive: form.active };
       const saved = editing === "new" ? await api.post<Raw>("/roles", body) : await api.patch<Raw>(`/roles/${(editing as Raw).roleId}`, body);
-      await api.put(`/roles/${saved.roleId}/navigation`, { rows: Object.values(perm).filter((r) => r.visible || r.canCreate) });
+      await api.put(`/roles/${saved.roleId}/navigation`, { rows: Object.values(perm).filter((r) => r.visible || r.canCreate).map((r) => ({ navKey: r.navKey, visible: !!r.visible, canCreate: !!r.canCreate })) });
       setEditing(null); roles.reload();
     } catch (err) { setFormError(errMsg(err, "Unable to save.")); }
     finally { setSaving(false); }

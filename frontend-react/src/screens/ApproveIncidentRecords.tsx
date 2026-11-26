@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "../router";
+import { Link, useRouteParams } from "../router";
 import { useAuth } from "../AuthContext";
 import { ApprovalRequest, approvalApi } from "../configApi";
 import { useAsync } from "../hooks";
@@ -11,6 +11,7 @@ function ApprovalPill({ status }: { status: ApprovalRequest["status"] }) {
 
 export function ApproveIncidentRecordsPage() {
   const { user } = useAuth();
+  const focusedApprovalId = useRouteParams("/incident-approvals/:id")?.id;
   const canDecide = user?.role === "ADMIN" || user?.role === "RESOLVER";
   const { data, loading, error, reload } = useAsync(() => approvalApi.list(), []);
   const [query, setQuery] = useState("");
@@ -21,6 +22,7 @@ export function ApproveIncidentRecordsPage() {
   const items = data ?? [];
   const q = query.trim().toLowerCase();
   const filtered = items.filter((i) => {
+    if (focusedApprovalId && String(i.approvalId) !== focusedApprovalId) return false;
     if (pendingOnly && i.status !== "Pending") return false;
     if (!q) return true;
     return [i.incidentRef, i.requestedBy, i.approvalType, i.shortDescription].some((s) => s.toLowerCase().includes(q));
@@ -94,7 +96,7 @@ export function ApproveIncidentRecordsPage() {
                       </td>
                       <td><ApprovalPill status={a.status} /></td>
                       <td>
-                        {a.status === "Pending" && canDecide && (
+                        {a.status === "Pending" && canDecide && String((a as any).requestedById) !== String(user?.id) && (
                           <div style={{ display: "flex", gap: 6 }}>
                             <button className="btn-primary btn-sm" disabled={busyId === a.approvalId} onClick={() => void decide(a.approvalId, "approve")}>Approve</button>
                             <button className="btn-ghost btn-sm" disabled={busyId === a.approvalId} onClick={() => void decide(a.approvalId, "reject")}>Reject</button>

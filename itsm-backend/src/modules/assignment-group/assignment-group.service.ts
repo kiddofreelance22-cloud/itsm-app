@@ -32,39 +32,57 @@ export class AssignmentGroupService {
     });
     const groups = allGroups.filter((g) => g.members?.some((m) => m.userId === userId));
 
-    return Promise.all(
-      groups.map(async (g) => {
-        const [assignedToMe, totalIncidents, resolvedTickets] = await Promise.all([
-          this.incidentRepo.count({
-            where: {
-              assignmentGroup: { groupId: g.groupId },
-              assignedTo: { userId },
-              status: Not(In(["Closed", "Resolved"])),
-            },
-          }),
-          this.incidentRepo.count({
-            where: {
-              assignmentGroup: { groupId: g.groupId },
-              status: Not(In(["Closed", "Resolved"])),
-            },
-          }),
-          this.incidentRepo.count({
-            where: {
-              assignmentGroup: { groupId: g.groupId },
-              status: "Resolved",
-            },
-          }),
-        ]);
-        return {
-          groupId: g.groupId,
-          groupName: g.groupName,
-          groupCode: g.groupCode,
-          assignedToMe,
-          totalIncidents,
-          resolvedTickets,
-        };
+    if (!groups.length) return [];
+
+    const counts = await this.incidentRepo
+      .createQueryBuilder("incident")
+      .leftJoin("incident.assignmentGroup", "assignmentGroup")
+      .leftJoin("incident.assignedTo", "assignee")
+      .select("assignmentGroup.groupId", "groupId")
+      .addSelect(
+        `COUNT(incident.incidentId) FILTER (
+          WHERE incident.status NOT IN (:...closedStatuses) AND assignee.userId = :userId
+        )`,
+        "assignedToMe",
+      )
+      .addSelect(
+        "COUNT(incident.incidentId) FILTER (WHERE incident.status NOT IN (:...closedStatuses))",
+        "totalIncidents",
+      )
+      .addSelect(
+        "COUNT(incident.incidentId) FILTER (WHERE incident.status = :resolvedStatus)",
+        "resolvedTickets",
+      )
+      .where("assignmentGroup.groupId IN (:...groupIds)", {
+        groupIds: groups.map((group) => group.groupId),
       })
+      .setParameters({ closedStatuses: ["Closed", "Resolved"], userId, resolvedStatus: "Resolved" })
+      .groupBy("assignmentGroup.groupId")
+      .getRawMany<{
+        groupId: number;
+        assignedToMe: string;
+        totalIncidents: string;
+        resolvedTickets: string;
+      }>();
+    const countsByGroupId = new Map(
+      counts.map((row) => [
+        Number(row.groupId),
+        {
+          assignedToMe: Number(row.assignedToMe),
+          totalIncidents: Number(row.totalIncidents),
+          resolvedTickets: Number(row.resolvedTickets),
+        },
+      ]),
     );
+
+    return groups.map((group) => ({
+      groupId: group.groupId,
+      groupName: group.groupName,
+      groupCode: group.groupCode,
+      assignedToMe: countsByGroupId.get(group.groupId)?.assignedToMe ?? 0,
+      totalIncidents: countsByGroupId.get(group.groupId)?.totalIncidents ?? 0,
+      resolvedTickets: countsByGroupId.get(group.groupId)?.resolvedTickets ?? 0,
+    }));
   }
 
   async create(dto: CreateAssignmentGroupDto): Promise<AssignmentGroup> {
@@ -76,10 +94,18 @@ export class AssignmentGroupService {
     if (exists) throw new ConflictException(`Group code "${dto.groupCode}" already exists`);
     const { managerId, memberIds, ...rest } = dto;
     const group = this.repo.create({ ...rest, groupName });
+    const [manager, members] = await Promise.all([
+      managerId
+        ? this.userRepo.findOne({ where: { userId: managerId } })
+        : Promise.resolve(undefined),
+      memberIds?.length
+        ? this.userRepo.find({ where: { userId: In(memberIds) } })
+        : Promise.resolve(undefined),
+    ]);
     if (managerId) {
-      group.manager = await this.userRepo.findOne({ where: { userId: managerId } }) || undefined;
+      group.manager = manager || undefined;
     }
-    if (memberIds?.length) group.members = await this.userRepo.find({ where: { userId: In(memberIds) } });
+    if (memberIds?.length) group.members = members ?? [];
 
     if (group.isDefault) {
       await this.repo.update({ isDefault: true }, { isDefault: false });

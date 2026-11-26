@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository, Between, IsNull, Not, In, MoreThan } from "typeorm";
+import { Repository, Between, IsNull, Not, In, MoreThan, Brackets, SelectQueryBuilder } from "typeorm";
 import { Incident } from "../incidents/entities/incident.entity";
 import { ServiceRequest } from "../requests/entities/request.entity";
 import { User } from "../users/entities/user.entity";
@@ -8,6 +8,7 @@ import { AssignmentGroup } from "../assignment-group/entities/assignment-group.e
 import { Task } from "../tasks/entities/task.entity";
 import { Problem } from "../problems/entities/problem.entity";
 import { Change } from "../changes/entities/change.entity";
+import { RequestsService } from "../requests/requests.service";
 
 @Injectable()
 export class DashboardService {
@@ -19,6 +20,7 @@ export class DashboardService {
     @InjectRepository(Task) private taskRepo: Repository<Task>,
     @InjectRepository(Problem) private problemRepo: Repository<Problem>,
     @InjectRepository(Change) private changeRepo: Repository<Change>,
+    private requestsService: RequestsService,
   ) {}
 
   /**
@@ -90,13 +92,18 @@ export class DashboardService {
       }),
     ]);
 
-    // Service Requests — the platform has no per-analyst fulfiller assignment
-    // for requests, so "mine" is what I personally raised/am tracking.
+    // Service Requests — what this analyst works on: assigned to me, or approved and unclaimed in one of my
+    // groups' queues. (It used to count requests I had raised myself, which is the end-user view, not the analyst's.)
+    const reqQueue: any[] = [{ assignedTo: { userId } }];
+    if (userGroupIds.length > 0) reqQueue.push({ assignmentGroup: { groupId: In(userGroupIds) }, assignedTo: IsNull(), status: "Approved" });
+    const reqScope = (extra: Record<string, unknown> = {}) => reqQueue.map((w) => ({ ...w, ...extra }));
+    const FULFILMENT = ["Approved", "In Progress", "On Hold", "Fulfilled", "Closed"];
     const [totalRequests, openRequests, inProgressRequests, completedToday] = await Promise.all([
-      this.requestRepo.count({ where: { requestedBy: { userId }, ...baseWhere } }),
-      this.requestRepo.count({ where: { requestedBy: { userId }, ...baseWhere, status: "Submitted" } }),
-      this.requestRepo.count({ where: { requestedBy: { userId }, ...baseWhere, status: "In Progress" } }),
-      this.requestRepo.count({ where: { requestedBy: { userId }, status: "Approved" } }),
+      this.requestRepo.count({ where: reqScope({ ...baseWhere, status: In(FULFILMENT) }) }),
+      // Waiting to be started: approved, in my queue or assigned to me.
+      this.requestRepo.count({ where: reqScope({ ...baseWhere, status: "Approved" }) }),
+      this.requestRepo.count({ where: [{ assignedTo: { userId }, status: In(["In Progress", "On Hold"]) }] }),
+      this.requestRepo.count({ where: [{ assignedTo: { userId }, fulfilledAt: Between(this.todayStart(), new Date()) }] }),
     ]);
 
     // Problem counts (assigned to me)
@@ -109,15 +116,26 @@ export class DashboardService {
       }),
     ]);
 
-    // Change counts (assigned to me)
-    const [totalChanges, openChanges, inProgressChanges, changesCompletedToday] = await Promise.all([
-      this.changeRepo.count({ where: { assignedTo: { userId }, ...baseWhere } }),
-      this.changeRepo.count({ where: { assignedTo: { userId }, ...baseWhere, status: "Open" } }),
-      this.changeRepo.count({ where: { assignedTo: { userId }, ...baseWhere, status: "In Progress" } }),
-      this.changeRepo.count({
-        where: { assignedTo: { userId }, completedAt: Between(this.todayStart(), new Date()) },
-      }),
+    // Change counts: changes the analyst works on or must decide — assigned to me, unassigned in one of my workgroups' queues
+    // (a change names its assignment group by workgroup name), or waiting for my approval. Cancelled changes are left out.
+    const myGroupNames = myGroups.map((g) => g.groupName);
+    const countChanges = (states: string[], extra?: (qb: SelectQueryBuilder<Change>) => void) => {
+      const qb = this.changeRepo.createQueryBuilder("c").where("c.state IN (:...states)", { states })
+        .andWhere(new Brackets((w) => {
+          w.where("c.assigned_to = :uid", { uid: userId });
+          if (myGroupNames.length) w.orWhere("(c.assignment_group IN (:...gn) AND c.assigned_to IS NULL)", { gn: myGroupNames });
+          w.orWhere("EXISTS (SELECT 1 FROM change_approvals ap WHERE ap.change_id = c.change_id AND ap.approver_id = :uid AND ap.status = 'Pending')", { uid: userId });
+        }));
+      if (from && to) qb.andWhere("c.created_at BETWEEN :cf AND :ct", { cf: from, ct: to });
+      extra?.(qb);
+      return qb.getCount();
+    };
+    const [openChanges, inProgressChanges, changesCompletedToday] = await Promise.all([
+      countChanges(["New", "Assess", "Authorize", "Scheduled"]),
+      countChanges(["Implement", "Review"]),
+      countChanges(["Closed"], (qb) => qb.andWhere("c.completed_at >= :today", { today: this.todayStart() })),
     ]);
+    const totalChanges = openChanges + inProgressChanges;
 
     // Task counts (assigned to me)
     const [totalTasks, openTasks, overdueTasks] = await Promise.all([
@@ -132,18 +150,20 @@ export class DashboardService {
         .getCount(),
     ]);
 
-    // Approvals — requests I personally raised that are pending/approved.
-    // (Workflow-approver-specific queues are covered by the My Approvals page.)
-    const [pendingApprovals, approvedApprovals] = await Promise.all([
-      this.requestRepo.count({ where: { requestedBy: { userId }, status: "In Progress" } }),
-      this.requestRepo.count({ where: { requestedBy: { userId }, status: "Approved" } }),
-    ]);
+    // Approvals — the same list the Approve Service Requests screen shows: waiting on me, and ones I decided.
+    let myApprovals: Awaited<ReturnType<RequestsService["approvalsFor"]>> = [];
+    try { myApprovals = await this.requestsService.approvalsFor({ userId, roles: [] }); } catch { /* approvals card just shows 0 */ }
+    const pendingApprovals = myApprovals.filter((a) => a.state === "Awaiting me").length;
+    const approvedApprovals = myApprovals.filter((a) => a.state === "Approved").length;
 
     // SLA stats — scoped to incidents assigned to me.
     const slaBreached = await this.incidentRepo.count({ where: { assignedTo: { userId }, slaBreached: true } });
     const slaTotal = await this.incidentRepo.count({ where: { assignedTo: { userId } } });
-    const slaMet = await this.incidentRepo.count({ where: { assignedTo: { userId }, slaResponseMet: true } });
-    const slaAtRisk = Math.max(0, slaTotal - slaMet - slaBreached);
+    // Same definition as the Admin Dashboard: an incident meets SLA unless its Resolution SLA is breached.
+    const slaMet = Math.max(0, slaTotal - slaBreached);
+    const slaAtRisk = await this.incidentRepo.count({
+      where: { assignedTo: { userId }, slaBreached: false, status: Not(In(["Resolved", "Closed"])), slaResolutionTarget: Between(new Date(), new Date(Date.now() + 4 * 3600000)) },
+    });
 
     // Unassigned tickets — only within groups I'm a member of.
     const unassignedByGroup = await Promise.all(
@@ -153,7 +173,10 @@ export class DashboardService {
         incidentCount: await this.incidentRepo.count({
           where: { assignmentGroup: { groupId: g.groupId }, assignedTo: IsNull() },
         }),
-        requestCount: 0,
+        // Approved service requests nobody has claimed yet (these show in the Service Request List as "Claim").
+        requestCount: await this.requestRepo.count({
+          where: { assignmentGroup: { groupId: g.groupId }, assignedTo: IsNull(), status: "Approved" },
+        }),
       }))
     );
 
@@ -194,16 +217,17 @@ export class DashboardService {
       order: { createdAt: "DESC" },
     });
 
-    // My open service requests (raised by me)
+    // Service requests waiting on me: assigned to me and not finished, or approved and unclaimed in my groups
     const myOpenRequests = await this.requestRepo.find({
-      where: { requestedBy: { userId } },
-      relations: { catalog: true },
+      where: reqScope({ status: In(["Approved", "In Progress", "On Hold"]) }),
+      relations: { catalog: true, priority: true, assignmentGroup: true },
       order: { createdAt: "DESC" },
       take: 5,
     });
 
     // Unassigned tickets total — within my groups only.
     const unassignedTotal = unassignedByGroup.reduce((sum, g) => sum + g.incidentCount, 0);
+    const unassignedRequestTotal = unassignedByGroup.reduce((sum, g) => sum + g.requestCount, 0);
 
     return {
       incidents: {
@@ -251,9 +275,9 @@ export class DashboardService {
         approved: approvedApprovals,
       },
       unassigned: {
-        total: unassignedTotal,
+        total: unassignedTotal + unassignedRequestTotal,
         incidents: unassignedTotal,
-        serviceRequests: 0,
+        serviceRequests: unassignedRequestTotal,
         tasks: 0,
       },
       sla: {
@@ -288,11 +312,12 @@ export class DashboardService {
         updatedAgo: this.timeAgo(i.updatedAt),
       })),
       myOpenRequests: myOpenRequests.map((r) => ({
-        id: `SRQ${String(r.requestId).padStart(9, "0")}`,
+        id: r.requestNumber ?? `REQ${String(r.requestId).padStart(8, "0")}`, // same number the Service Request list shows
         summary: r.catalog?.catalogName ?? "—",
-        priority: "Medium",
+        priority: r.priority?.priorityName ?? "—",
+        priorityColor: r.priority?.color ?? null,
         status: r.status,
-        assignmentGroup: "—",
+        assignmentGroup: r.assignmentGroup?.groupName ?? "—",
         updatedAgo: this.timeAgo(new Date(r.createdAt)),
       })),
       unassignedByGroup: unassignedByGroup.filter((g) => g.incidentCount > 0 || g.requestCount > 0),
@@ -305,7 +330,7 @@ export class DashboardService {
   // ---------------------------------------------------------------------
   async getEndUserDashboard(userId: number) {
     const mine = await this.incidentRepo.find({
-      where: { createdBy: { userId } },
+      where: [{ createdBy: { userId } }, { assignedTo: { userId } }, { loggedBy: userId }], // same set as My Incidents (IncidentsService.findAllForUser)
       relations: { assignmentGroup: true },
       order: { createdAt: "DESC" },
     });
@@ -331,6 +356,7 @@ export class DashboardService {
         total: mine.length,
         open: open.length,
         resolved: resolved.length,
+        closed: closed.length,
         needsFeedback: needsFeedback.length,
       },
       openTickets: open.map(row),
@@ -438,14 +464,18 @@ export class DashboardService {
       this.groupRepo.count(),
     ]);
 
-    const statuses = ["Open", "Assigned", "In Progress", "On Hold", "Resolved", "Closed"];
-    const priorities = ["Critical", "High", "Medium", "Low"];
-    const byStatus = await Promise.all(
-      statuses.map(async (s) => ({ status: s, count: await this.incidentRepo.count({ where: { status: s as any } }) })),
-    );
-    const byPriority = await Promise.all(
-      priorities.map(async (p) => ({ priority: p, count: await this.incidentRepo.count({ where: { priority: p as any, status: notDone } }) })),
-    );
+    // Group by the values actually stored (never a hard-coded list) so the widgets always add up to the tiles.
+    const statusRows = await this.incidentRepo.createQueryBuilder("i")
+      .select("i.status", "status").addSelect("COUNT(*)", "count").groupBy("i.status").getRawMany();
+    const byStatus = statusRows.map((r) => ({ status: String(r.status), count: Number(r.count) }));
+    const priorityRows = await this.incidentRepo.createQueryBuilder("i")
+      .select("i.priority", "priority").addSelect("COUNT(*)", "count")
+      .where("i.status NOT IN (:...done)", { done: ["Resolved", "Closed"] }).groupBy("i.priority").getRawMany();
+    const canonPriority = (p: string) => (/^p?1\b|critical/i.test(p) ? "Critical" : /^p?2\b|high/i.test(p) ? "High" : /^p?3\b|medium|moderate/i.test(p) ? "Medium" : /^p?4\b|low/i.test(p) ? "Low" : p);
+    const prioMap = new Map<string, number>();
+    for (const r of priorityRows) prioMap.set(canonPriority(String(r.priority)), (prioMap.get(canonPriority(String(r.priority))) ?? 0) + Number(r.count));
+    const byPriority = ["Critical", "High", "Medium", "Low", ...[...prioMap.keys()].filter((k) => !["Critical", "High", "Medium", "Low"].includes(k))]
+      .map((p) => ({ priority: p, count: prioMap.get(p) ?? 0 }));
 
     const byGroupRaw = await this.incidentRepo
       .createQueryBuilder("i")

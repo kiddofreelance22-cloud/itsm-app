@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import { api } from "../api";
 import { DirectorySourcePayload, DirectorySourceRow, MappingRow, SyncRun, directoryApi } from "../configApi";
 import { useAsync } from "../hooks";

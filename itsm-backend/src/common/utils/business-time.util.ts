@@ -68,3 +68,31 @@ export function addBusinessMinutes(start: Date, minutes: number, days: ServiceWi
   }
   return new Date(start.getTime() + minutes * 60000);
 }
+
+/** Business minutes between two instants (0 if `to` <= `from`). Falls back to wall-clock minutes if the window has no working time. */
+export function businessMinutesBetween(from: Date, to: Date, days: ServiceWindowDay[], zoneLabel?: string | null): number {
+  if (to.getTime() <= from.getTime()) return 0;
+  const wall = Math.round((to.getTime() - from.getTime()) / 60000);
+  const zone = ianaZone(zoneLabel);
+  try { new Intl.DateTimeFormat("en-US", { timeZone: zone }); } catch { return wall; }
+  const byDay = new Map<number, { from: number; to: number }>();
+  for (const d of days ?? []) if (d.enabled && hm(d.to) > hm(d.from)) byDay.set(d.day, { from: hm(d.from), to: hm(d.to) });
+  if (byDay.size === 0) return wall;
+
+  let total = 0;
+  let cursor = from;
+  for (let guard = 0; guard < 4000 && cursor.getTime() < to.getTime(); guard++) {
+    const lp = localParts(cursor, zone);
+    const dayEnd = fromLocal(lp.y, lp.mo, lp.d + 1, 0, zone);
+    const w = byDay.get(lp.day);
+    if (w) {
+      const start = Math.max(lp.minutes, w.from);
+      const endMinutes = to.getTime() < dayEnd.getTime() ? localParts(to, zone).minutes : 24 * 60;
+      const end = Math.min(endMinutes, w.to);
+      if (end > start) total += end - start;
+    }
+    cursor = dayEnd;
+  }
+  return total;
+}
+

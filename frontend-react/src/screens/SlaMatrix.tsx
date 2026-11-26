@@ -94,7 +94,7 @@ export function SlaMatrixPage() {
 
   return (
     <>
-      <PageHeader crumb="Configuration > SLA Configurations > SLA Matrix" title="SLA Matrix"
+      <PageHeader crumb="Configuration > Incident SLA Configurations > SLA Matrix" title="SLA Matrix"
         subtitle="Override the default Response/Resolution SLA for a specific Workgroup + Priority combination. Each Workgroup + Priority pair can only be mapped once." />
       <div className="page-body">
         <div className="card admin-master-table-wrap">

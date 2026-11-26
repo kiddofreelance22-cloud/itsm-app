@@ -16,7 +16,15 @@ function friendly(a: Activity): string | null {
     case "resolved": return "Marked as Resolved";
     case "closed": return "You closed this incident";
     case "reopened": return "You reopened this incident";
-    case "status_change": return /in progress/i.test(a.content ?? "") ? "Work started on your incident" : null;
+    case "status_change": {
+      // Judge by the status the incident moved TO (the text reads "…from X to Y"), not any status named in the sentence.
+      const to = ((a.content ?? "").match(/\bto\s+"?([A-Za-z ]+?)"?\s*[.,)]?\s*$/i)?.[1] ?? a.content ?? "").trim();
+      if (/^in progress$/i.test(to)) return "Work started on your incident";
+      if (/^on hold|pending/i.test(to)) return "Waiting on a response before work continues";
+      if (/^resolved$/i.test(to)) return "Marked as Resolved";
+      if (/^closed$/i.test(to)) return "This incident was closed";
+      return null;
+    }
     default: return null;
   }
 }
@@ -64,7 +72,8 @@ export function IncidentDetailPage() {
   const closed = inc.status === "Closed";
   const cancelled = inc.status === "Cancelled";
   const messages = acts.filter((a) => a.type === "comment" && !a.isWorkNote);   // internal work notes never shown to requesters
-  const timeline = acts.map((a) => ({ a, text: friendly(a) })).filter((x): x is { a: Activity; text: string } => !!x.text);
+  const timeline = acts.map((a) => ({ a, text: friendly(a) })).filter((x): x is { a: Activity; text: string } => !!x.text)
+    .filter((x, i, arr) => i === 0 || arr[i - 1].text !== x.text); // a resolve logs both an event and a status change: show it once;
   const shownMsgs = allMsgs ? messages : messages.slice(-3);
   const paused = !!inc.slaPausedAt;
   const done = closed || resolved;
@@ -157,6 +166,7 @@ export function IncidentDetailPage() {
                   {inc.slaResolutionTarget && !done && <div style={{ fontSize: 12, color: "#98A2B3", marginTop: 6 }}>Expected by {fmtShort(inc.slaResolutionTarget)}</div>}</div>
               )}
               {vis("Resolution Notes") && inc.resolutionNotes && <div className="field-group" style={{ marginTop: 14 }}><span className="lbl">Resolution Notes</span><div style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{inc.resolutionNotes}</div></div>}
+              {vis("Resolution Code") && inc.resolutionCode && <div className="field-group" style={{ marginTop: 14 }}><span className="lbl">Resolution Code</span><div style={{ fontSize: 13 }}>{inc.resolutionCode}</div></div>}
               {vis("Closure Code") && inc.closureCode && <div className="field-group" style={{ marginTop: 14 }}><span className="lbl">Closure Code</span><div style={{ fontSize: 13 }}>{inc.closureCode}</div></div>}
               {vis("Feedback / Rating") && (
                 <div className="field-group" style={{ marginTop: 14 }}>

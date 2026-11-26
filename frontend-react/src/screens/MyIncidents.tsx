@@ -28,8 +28,11 @@ export function MyIncidentsPage() {
 
   const rows = data ?? [];
   const label = (r: Raw) => userStatus(r.status);
-  const stat = (n: string) => rows.filter((r) => label(r) === n).length;
-  const inTab = (r: Raw, t: Tab) => t === "All" || (t === "Open" ? !["Resolved", "Closed", "Cancelled"].includes(r.status) : r.status === t);
+  // One bucket per incident so the cards always add up to Total: New + In Progress + Resolved + Closed(+Cancelled).
+  const bucket = (r: Raw): "New" | "In Progress" | "Resolved" | "Closed" =>
+    label(r) === "New" ? "New" : r.status === "Resolved" ? "Resolved" : ["Closed", "Cancelled"].includes(r.status) ? "Closed" : "In Progress";
+  const stat = (n: string) => rows.filter((r) => bucket(r) === n).length;
+  const inTab = (r: Raw, t: Tab) => t === "All" || (t === "Open" ? ["New", "In Progress"].includes(bucket(r)) : bucket(r) === t);
   const activeFilters = [applied.category, applied.priority, applied.range !== "Any time" ? applied.range : ""].filter(Boolean).length;
 
   const filtered = useMemo(() => {
@@ -72,7 +75,7 @@ export function MyIncidentsPage() {
         </div>
       </div>
       <div className="dash-stats">
-        {[["Total Reported", rows.length, undefined], ["New", stat("New"), undefined], ["In Progress", rows.filter((r) => !["Open", "Resolved", "Closed", "Cancelled"].includes(r.status)).length, "#175CD3"], ["Resolved", stat("Resolved"), "#067647"], ["Closed", stat("Closed"), "#667085"]].map(([l, n, c]) => (
+        {[["Total Reported", rows.length, undefined], ["New", stat("New"), undefined], ["In Progress", stat("In Progress"), "#175CD3"], ["Resolved", stat("Resolved"), "#067647"], ["Closed", stat("Closed"), "#667085"]].map(([l, n, c]) => (
           <div className="dash-stat" key={l as string}><div className="dash-stat-num" style={c ? { color: c as string } : undefined}>{loading ? "–" : (n as number)}</div><div className="dash-stat-label">{l as string}</div></div>
         ))}
       </div>

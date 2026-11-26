@@ -7,9 +7,10 @@ import { Category } from "../../categories/entities/category.entity";
 import { SubCategory } from "../../sub-category/entities/sub-category.entity";
 import { Workflow } from "../../workflows/entities/workflow.entity";
 import { AssignmentGroup } from "../../assignment-group/entities/assignment-group.entity";
-import { Priority } from "../../priority/entities/priority.entity";
+import { ServicePriority } from "../../service-priorities/entities/service-priority.entity";
 import { Impact } from "../../impact/entities/impact.entity";
-import { Urgency } from "../../urgency/entities/urgency.entity";
+import { ServiceImpact } from "../../service-impacts/entities/service-impact.entity";
+import { ServiceUrgency } from "../../service-urgencies/entities/service-urgency.entity";
 import { CatalogVariable } from "./catalog-variable.entity";
 import { CatalogFormSection } from "./catalog-form-section.entity";
 import { CatalogAttachment } from "./catalog-attachment.entity";
@@ -83,17 +84,22 @@ export class Catalog {
   @Column({ name: "stage", type: "varchar", default: "Production" })
   stage!: string;
 
-  @ManyToOne(() => Priority, { nullable: true, onDelete: "SET NULL" })
+  @ManyToOne(() => ServicePriority, { nullable: true, onDelete: "SET NULL" })
   @JoinColumn({ name: "priority_id" })
-  priority?: Priority;
+  priority?: ServicePriority;
 
   @ManyToOne(() => Impact, { nullable: true, onDelete: "SET NULL" })
   @JoinColumn({ name: "impact_id" })
   impact?: Impact;
 
-  @ManyToOne(() => Urgency, { nullable: true, onDelete: "SET NULL" })
+  /** Default SERVICE impact for requests raised from this item (separate from the incident impact above). */
+  @ManyToOne(() => ServiceImpact, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "service_impact_id" })
+  serviceImpact?: ServiceImpact;
+
+  @ManyToOne(() => ServiceUrgency, { nullable: true, onDelete: "SET NULL" })
   @JoinColumn({ name: "urgency_id" })
-  urgency?: Urgency;
+  urgency?: ServiceUrgency;
 
   @Column({ name: "sla_name", type: "varchar", nullable: true })
   slaName!: string;
@@ -136,6 +142,9 @@ export class Catalog {
 
   @Column({ name: "hide_price", type: "boolean", default: false })
   hidePrice!: boolean;
+
+  @Column({ name: "estimated_cost", type: "numeric", precision: 12, scale: 2, nullable: true })
+  estimatedCost?: string | number | null;
 
   // ── Workflow Configuration ─────────────────────────────────────────────────
   @ManyToOne(() => Workflow, { nullable: true, onDelete: "SET NULL" })

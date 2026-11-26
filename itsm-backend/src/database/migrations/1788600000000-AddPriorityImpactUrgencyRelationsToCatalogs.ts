@@ -58,9 +58,9 @@ export class AddPriorityImpactUrgencyRelationsToCatalogs1788600000000 implements
     `);
 
     // Drop old string columns
-    await queryRunner.query(`ALTER TABLE "catalogs" DROP COLUMN "impact"`);
-    await queryRunner.query(`ALTER TABLE "catalogs" DROP COLUMN "urgency"`);
-    await queryRunner.query(`ALTER TABLE "catalogs" DROP COLUMN "default_priority"`);
+    await queryRunner.query(`ALTER TABLE "catalogs" DROP COLUMN IF EXISTS "impact"`);
+    await queryRunner.query(`ALTER TABLE "catalogs" DROP COLUMN IF EXISTS "urgency"`);
+    await queryRunner.query(`ALTER TABLE "catalogs" DROP COLUMN IF EXISTS "default_priority"`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
@@ -92,11 +92,11 @@ export class AddPriorityImpactUrgencyRelationsToCatalogs1788600000000 implements
     `);
 
     // Drop foreign key columns
-    await queryRunner.query(`ALTER TABLE "catalogs" DROP CONSTRAINT "fk_catalogs_urgency"`);
-    await queryRunner.query(`ALTER TABLE "catalogs" DROP COLUMN "urgency_id"`);
-    await queryRunner.query(`ALTER TABLE "catalogs" DROP CONSTRAINT "fk_catalogs_impact"`);
-    await queryRunner.query(`ALTER TABLE "catalogs" DROP COLUMN "impact_id"`);
-    await queryRunner.query(`ALTER TABLE "catalogs" DROP CONSTRAINT "fk_catalogs_priority"`);
-    await queryRunner.query(`ALTER TABLE "catalogs" DROP COLUMN "priority_id"`);
+    await queryRunner.query(`ALTER TABLE "catalogs" DROP CONSTRAINT IF EXISTS "fk_catalogs_urgency"`);
+    await queryRunner.query(`ALTER TABLE "catalogs" DROP COLUMN IF EXISTS "urgency_id"`);
+    await queryRunner.query(`ALTER TABLE "catalogs" DROP CONSTRAINT IF EXISTS "fk_catalogs_impact"`);
+    await queryRunner.query(`ALTER TABLE "catalogs" DROP COLUMN IF EXISTS "impact_id"`);
+    await queryRunner.query(`ALTER TABLE "catalogs" DROP CONSTRAINT IF EXISTS "fk_catalogs_priority"`);
+    await queryRunner.query(`ALTER TABLE "catalogs" DROP COLUMN IF EXISTS "priority_id"`);
   }
 }

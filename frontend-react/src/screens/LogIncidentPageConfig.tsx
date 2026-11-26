@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { LogField, logFieldApi } from "../configApi";
 import { useAsync } from "../hooks";
 import { useRouter } from "../router";
-import { ErrorBar, PageHeader, TH, errMsg } from "../components/configKit";
+import { ErrorBar, TH, errMsg } from "../components/configKit";
 
 export function LogIncidentPageConfigPage() {
   const { navigate } = useRouter();

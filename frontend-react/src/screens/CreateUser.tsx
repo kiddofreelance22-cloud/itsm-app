@@ -193,6 +193,9 @@ export function CreateUserPage() {
   }, []);
 
   const sections = React.useMemo(() => {
+    // Directory-mapped attributes that are already standard fields (First Name, Manager, City…) must not appear twice.
+    const standardKeys = new Set(baseSections.flatMap((x) => x.fields.map((f) => f.key)));
+    const standardLabels = new Set(baseSections.flatMap((x) => x.fields.map((f) => f.label.toLowerCase().replace(/[^a-z0-9]/g, ""))));
     const customFields: FormField[] = customAttrs.map((ca) => {
       const trimmed = ca.localField.trim();
       const slug = trimmed.replace(/[^a-zA-Z0-9]+(.)/g, (_, c) => c.toUpperCase()).replace(/[^a-zA-Z0-9]/g, "");
@@ -203,7 +206,7 @@ export function CreateUserPage() {
         label: trimmed,
         type: "text" as const,
       };
-    });
+    }).filter((f) => !standardKeys.has(f.key) && !standardLabels.has(f.label.toLowerCase().replace(/[^a-z0-9]/g, "")));
 
     return baseSections.map((sec, idx) => {
       if (idx === 0) {
@@ -442,7 +445,7 @@ export function CreateUserPage() {
           </button>
         </div>
       </div>
-      <form className="page-body create-user-form" onSubmit={submit}>
+      <form className="page-body create-user-form" onSubmit={submit} autoComplete="off">
         {error && <div className="admin-master-error" role="alert">{error}</div>}
         {sections.map((section) => (
           <section className="card create-user-section" key={section.title}>
@@ -472,6 +475,7 @@ export function CreateUserPage() {
                     <input
                       className="input"
                       type={field.type ?? "text"}
+                      autoComplete={field.type === "password" ? "new-password" : field.key === "username" ? "off" : "off"}
                       required={field.required}
                       value={String(form[field.key] ?? "")}
                       onChange={(event) => setValue(field.key, event.target.value)}

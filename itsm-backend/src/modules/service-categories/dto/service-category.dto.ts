@@ -3,7 +3,7 @@ import { IsBoolean, IsInt, IsOptional, IsString, MaxLength } from "class-validat
 
 export class CreateServiceCategoryDto {
   @IsString() @MaxLength(150) categoryName!: string;
-  @IsOptional() @IsInt() parentCategoryId?: number;
+  @IsOptional() @IsInt() parentCategoryId?: number | null;
   @IsOptional() @IsString() @MaxLength(150) parentCategoryName?: string;
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsString() @MaxLength(500) imageUrl?: string;

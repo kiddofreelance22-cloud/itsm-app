@@ -1,3 +1,5 @@
+import { LookupField } from "../components/LookupField";
+import { lookupSourceLabel, normalizeLookupSource } from "../lookupSources";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Save } from "lucide-react";
 import { api } from "../api";
@@ -39,7 +41,6 @@ export function AdminServiceRequestForm({ editing = false }: { editing?: boolean
   const [initializingEdit, setInitializingEdit] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
-  const [lookupError, setLookupError] = useState("");
   const [initializedCatalog, setInitializedCatalog] = useState<number | null>(null);
 
   const catalog = catalogQuery.data as ServiceCatalog | null;
@@ -88,7 +89,6 @@ export function AdminServiceRequestForm({ editing = false }: { editing?: boolean
     return [...groupsByName.entries()].sort(([a], [b]) =>
       (order.get(a) ?? Number.MAX_SAFE_INTEGER) - (order.get(b) ?? Number.MAX_SAFE_INTEGER));
   }, [catalog, visibleVariables]);
-  const assignmentGroups = groupsQuery.data ?? [];
   const readOnlyStatus = !!request && request.status !== "Submitted";
 
   const searchUsers = useCallback(async (query: string): Promise<SearchOption[]> => {
@@ -198,8 +198,8 @@ export function AdminServiceRequestForm({ editing = false }: { editing?: boolean
       case "user_lookup":
       case "group_lookup": {
         const isUser = variable.fieldType === "user_lookup";
-        const groupOptions = assignmentGroups.map((group) => ({ value: group.groupName, label: group.groupName }));
-        field = <SearchSelect value={value} label={value} fetchOptions={isUser ? searchUsers : undefined} options={isUser ? undefined : groupOptions} onSelect={(option) => set(option?.label ?? "")} placeholder={variable.placeholder || variable.lookupSource || (isUser ? "Search people…" : "Search groups…")} disabled={variable.readOnly || readOnlyStatus} ariaLabel={variable.label} />;
+        const source = isUser ? "users" : normalizeLookupSource(variable.lookupSource);
+        field = <LookupField source={source} value={value} label={value} fetchOverride={source === "users" ? searchUsers : undefined} onSelect={(option) => set(option?.label ?? "")} placeholder={variable.placeholder || (isUser ? "Search people (User table)…" : `Search ${lookupSourceLabel(source).toLowerCase()}…`)} disabled={variable.readOnly || readOnlyStatus} ariaLabel={variable.label} />;
         break;
       }
       case "number":

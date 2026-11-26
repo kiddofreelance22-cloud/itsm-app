@@ -13,8 +13,8 @@ export class CreateWorkflowStepDto {
   stepOrder: number;
 
   @ApiProperty({ example: "approval", enum: ["approval", "task", "notification", "condition", "wait", "subflow", "update"] })
-  @IsIn(["approval", "task", "notification", "condition", "wait", "subflow", "update"])
-  stepType: "approval" | "task" | "notification" | "condition" | "wait" | "subflow" | "update";
+  @IsIn(["approval", "task", "notification", "condition", "wait", "subflow", "update", "record", "integration"])
+  stepType: "approval" | "task" | "notification" | "condition" | "wait" | "subflow" | "update" | "record" | "integration";
 
   @ApiPropertyOptional({
     example: 2,

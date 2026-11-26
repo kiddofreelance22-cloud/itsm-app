@@ -9,7 +9,7 @@ import * as bcrypt from "bcrypt";
 import * as crypto from "crypto";
 import { User } from "./entities/user.entity";
 import { CreateUserDto } from "./dto/create-user.dto";
-import { UpdateUserDto } from "./dto/update-user.dto";
+import { UpdateMyProfileDto, UpdateUserDto } from "./dto/update-user.dto";
 import { MailService } from "../mail/mail.service";
 import { Role } from "../roles/entities/role.entity";
 import { UserRole } from "../roles/entities/user-role.entity";
@@ -189,6 +189,7 @@ export class UsersService {
     });
     if (!user) throw new NotFoundException(`User ${userId} not found`);
 
+    const previousPrimaryRoleId = user.primaryRole?.roleId;
     if (dto.username || dto.email) {
       const conflict = await this.usersRepo.findOne({
         where: [
@@ -247,6 +248,24 @@ export class UsersService {
 
     await this.usersRepo.save(user);
 
+    if (dto.roleId !== undefined) {
+      const nextPrimaryRoleId = user.primaryRole?.roleId;
+      if (previousPrimaryRoleId && previousPrimaryRoleId !== nextPrimaryRoleId) {
+        const previousRole = await this.userRolesRepo.findOne({
+          where: { user: { userId }, role: { roleId: previousPrimaryRoleId } },
+        });
+        if (previousRole) await this.userRolesRepo.remove(previousRole);
+      }
+      if (user.primaryRole) {
+        const assignedRole = await this.userRolesRepo.findOne({
+          where: { user: { userId }, role: { roleId: user.primaryRole.roleId } },
+        });
+        if (!assignedRole) {
+          await this.userRolesRepo.save(this.userRolesRepo.create({ user, role: user.primaryRole }));
+        }
+      }
+    }
+
     // Keep the new primary group's Members list in sync (mirrors the
     // same fix applied in create()) — and drop the user from the old
     // primary group's members if they moved to a different group.
@@ -270,6 +289,26 @@ export class UsersService {
     return this.findOne(userId);
   }
 
+  async updateMyProfile(userId: number, dto: UpdateMyProfileDto): Promise<SafeUser> {
+    const user = await this.usersRepo.findOne({ where: { userId } });
+    if (!user) throw new NotFoundException(`User ${userId} not found`);
+
+    if (dto.email && dto.email !== user.email) {
+      const conflict = await this.usersRepo.findOne({ where: { email: dto.email } });
+      if (conflict) throw new ConflictException("Email already in use");
+    }
+
+    if (dto.fullName !== undefined) {
+      user.fullName = dto.fullName;
+      user.displayName = dto.fullName;
+    }
+    if (dto.email !== undefined) user.email = dto.email;
+    if (dto.profilePhotoUrl !== undefined) user.profilePhotoUrl = dto.profilePhotoUrl;
+
+    await this.usersRepo.save(user);
+    return this.findOne(userId);
+  }
+
   async remove(userId: number): Promise<void> {
     const user = await this.usersRepo.findOne({ where: { userId } });
     if (!user) throw new NotFoundException(`User ${userId} not found`);
@@ -278,6 +317,37 @@ export class UsersService {
 
   async deactivate(userId: number): Promise<SafeUser> {
     return this.update(userId, { isActive: false });
+  }
+
+  /** Active users (id, name, username only) for assignee pickers; the controller limits it to Admin and Fulfiller. */
+  async listAssignable(): Promise<{ userId: number; fullName: string; username: string; isActive: boolean }[]> {
+    const users = await this.usersRepo
+      .createQueryBuilder("u")
+      .select(["u.userId", "u.fullName", "u.username", "u.isActive"])
+      .where("u.isActive = true")
+      .orderBy("u.fullName", "ASC")
+      .getMany();
+    return users.map((u) => ({ userId: u.userId, fullName: u.fullName, username: u.username, isActive: u.isActive }));
+  }
+
+  /** Minimal active-user directory for the administrator-only support-session picker. */
+  async listSwitchable(): Promise<{ userId: number; fullName: string; username: string; email: string; profilePhotoUrl: string | null; roles: string[] }[]> {
+    const users = await this.usersRepo.find({
+      where: { isActive: true },
+      relations: { userRoles: { role: true }, primaryRole: true },
+      order: { fullName: "ASC" },
+    });
+    return users.map((user) => ({
+      userId: user.userId,
+      fullName: user.displayName?.trim() || user.fullName,
+      username: user.username,
+      email: user.email,
+      profilePhotoUrl: user.profilePhotoUrl ?? null,
+      roles: [...new Set([
+        ...(user.primaryRole?.roleName ? [user.primaryRole.roleName] : []),
+        ...(user.userRoles ?? []).map((assignment) => assignment.role?.roleName).filter((name): name is string => !!name),
+      ])],
+    }));
   }
 
   /**
@@ -291,7 +361,7 @@ export class UsersService {
   async searchDirectory(query?: string): Promise<{ userId: number; fullName: string; username: string; email: string; employeeId: string | null; phone: string | null; department?: string | null }[]> {
     const qb = this.usersRepo
       .createQueryBuilder("u")
-      .select(["u.userId", "u.fullName", "u.username", "u.email", "u.firstName", "u.lastName", "u.employeeId", "u.phone"])
+      .select(["u.userId", "u.fullName", "u.displayName", "u.username", "u.email", "u.firstName", "u.lastName", "u.employeeId", "u.phone"])
       .where("u.isActive = true")
       .orderBy("u.fullName", "ASC")
       .limit(25);
@@ -305,6 +375,6 @@ export class UsersService {
     });
 
     const users = await qb.getMany();
-    return users.map((u) => ({ userId: u.userId, fullName: u.fullName, username: u.username, email: u.email, employeeId: u.employeeId ?? null, phone: u.phone ?? null }));
+    return users.map((u) => ({ userId: u.userId, fullName: u.displayName?.trim() || u.fullName, username: u.username, email: u.email, employeeId: u.employeeId ?? null, phone: u.phone ?? null }));
   }
 }

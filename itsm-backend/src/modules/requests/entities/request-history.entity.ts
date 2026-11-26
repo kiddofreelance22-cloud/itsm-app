@@ -14,10 +14,20 @@ export type RequestHistoryAction =
   | "Submitted"
   | "Approved"
   | "Rejected"
+  | "Returned"
+  | "Resubmitted"
+  | "Escalated"
   | "Commented"
   | "Reassigned"
   | "Updated"
   | "Cancelled"
+  | "Assigned"
+  | "Started"
+  | "OnHold"
+  | "Resumed"
+  | "Fulfilled"
+  | "Reopened"
+  | "Reclassified"
   | "Closed";
 
 @Entity("request_history")
@@ -36,9 +46,9 @@ export class RequestHistory {
   @Column()
   action!: RequestHistoryAction;
 
-  @ManyToOne(() => User, { onDelete: "RESTRICT" })
+  @ManyToOne(() => User, { nullable: true, onDelete: "RESTRICT" })
   @JoinColumn({ name: "action_by" })
-  actionBy!: User;
+  actionBy?: User | null;
 
   @Column({ type: "text", nullable: true })
   comments?: string;

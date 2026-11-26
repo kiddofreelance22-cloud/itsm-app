@@ -21,10 +21,10 @@ export class AddSubCategoryAndItemTypeToCatalogs1788700000000 implements Migrati
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Drop item_type column
-    await queryRunner.query(`ALTER TABLE "catalogs" DROP COLUMN "item_type"`);
+    await queryRunner.query(`ALTER TABLE "catalogs" DROP COLUMN IF EXISTS "item_type"`);
     
     // Drop sub_category_id column and constraint
-    await queryRunner.query(`ALTER TABLE "catalogs" DROP CONSTRAINT "fk_catalogs_sub_category"`);
-    await queryRunner.query(`ALTER TABLE "catalogs" DROP COLUMN "sub_category_id"`);
+    await queryRunner.query(`ALTER TABLE "catalogs" DROP CONSTRAINT IF EXISTS "fk_catalogs_sub_category"`);
+    await queryRunner.query(`ALTER TABLE "catalogs" DROP COLUMN IF EXISTS "sub_category_id"`);
   }
 }

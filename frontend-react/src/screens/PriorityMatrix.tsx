@@ -24,7 +24,7 @@ export function PriorityMatrixPage() {
 
   const pris = [...(priorities.data ?? [])].sort((a, b) => a.order - b.order || a.priorityId - b.priorityId);
   const colorFor = (priorityId: number) => COLORS[Math.min(Math.max(pris.findIndex((x) => x.priorityId === priorityId), 0), COLORS.length - 1)];
-  const label = (x: Pri) => (x.priorityCode ? `${x.priorityName} (${x.priorityCode})` : x.priorityName);
+  const label = (x: Pri) => x.priorityName;
   const selU = u || String(urgencies.data?.[0]?.urgencyId ?? "");
   const selI = i || String(impacts.data?.[0]?.impactId ?? "");
   const selP = p || String(pris[0]?.priorityId ?? "");
@@ -47,23 +47,23 @@ export function PriorityMatrixPage() {
 
   return (
     <>
-      <PageHeader crumb="Configuration > SLA Configurations > Priority Matrix" title="Priority Matrix"
+      <PageHeader crumb="Configuration > Incident SLA Configurations > Priority Matrix" title="Priority Matrix"
         subtitle="Pick an Urgency, Impact and Priority, then add the combination. Each Urgency + Impact pair can only be mapped once." />
       <div className="page-body">
         <ErrorBar msg={matrix.error ?? err} />
         <div className="card admin-master-table-wrap">
           <div style={{ padding: "24px 20px 20px" }}>
-            <div style={{ display: "flex", gap: 16, alignItems: "flex-end" }}>
-              <label className="field-group" style={{ flex: 1, margin: 0 }}><span className="lbl" style={{ marginBottom: 6 }}>Urgency</span>
+            <div className="priority-matrix-form-row">
+              <label className="field-group priority-matrix-field"><span className="lbl">Urgency</span>
                 <select className="select" value={selU} onChange={(e) => setU(e.target.value)}>
                   {(urgencies.data ?? []).map((x) => <option key={x.urgencyId} value={x.urgencyId}>{x.urgencyName}</option>)}</select></label>
-              <label className="field-group" style={{ flex: 1, margin: 0 }}><span className="lbl" style={{ marginBottom: 6 }}>Impact</span>
+              <label className="field-group priority-matrix-field"><span className="lbl">Impact</span>
                 <select className="select" value={selI} onChange={(e) => setI(e.target.value)}>
                   {(impacts.data ?? []).map((x) => <option key={x.impactId} value={x.impactId}>{x.impactName}</option>)}</select></label>
-              <label className="field-group" style={{ flex: 1, margin: 0 }}><span className="lbl" style={{ marginBottom: 6 }}>Priority</span>
+              <label className="field-group priority-matrix-field"><span className="lbl">Priority</span>
                 <select className="select" value={selP} onChange={(e) => setP(e.target.value)}>
                   {pris.map((x) => <option key={x.priorityId} value={x.priorityId}>{label(x)}</option>)}</select></label>
-              <button className="btn-primary" style={{ padding: "8px 16px", height: 36 }} disabled={busy} onClick={add}>+ Add Combination</button>
+              <button className="btn-primary priority-matrix-add" disabled={busy} onClick={add}>+ Add Combination</button>
             </div>
           </div>
 
@@ -94,16 +94,19 @@ export function PriorityMatrixPage() {
               </table>
             )}
 
-            <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 24 }}>
-              {pris.slice(0, 4).map((x, idx) => (
-                <div key={x.priorityId} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 500, color: "var(--ink)" }}>
-                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: COLORS[idx].dot }} />{label(x)}
-                </div>
-              ))}
-              <div style={{ flex: 1 }} />
-              <Link to="/config/admin/impact" className="btn-ghost" style={{ border: "1px solid #D0D5DD", background: "#fff", color: "#344054" }}>Edit Impact Levels</Link>
-              <Link to="/config/admin/urgency" className="btn-ghost" style={{ border: "1px solid #D0D5DD", background: "#fff", color: "#344054" }}>Edit Urgency Levels</Link>
-              <Link to="/config/admin/priority" className="btn-ghost" style={{ border: "1px solid #D0D5DD", background: "#fff", color: "#344054" }}>Edit Priority Levels</Link>
+            <div className="priority-matrix-meta">
+              <div className="priority-matrix-legend">
+                {pris.slice(0, 4).map((x, idx) => (
+                  <div key={x.priorityId} className="priority-matrix-legend-item">
+                    <span className="priority-matrix-dot" style={{ background: COLORS[idx].dot }} />{label(x)}
+                  </div>
+                ))}
+              </div>
+              <div className="priority-matrix-actions">
+                <Link to="/config/admin/impact" className="btn-ghost">Edit Impact Levels</Link>
+                <Link to="/config/admin/urgency" className="btn-ghost">Edit Urgency Levels</Link>
+                <Link to="/config/admin/priority" className="btn-ghost">Edit Priority Levels</Link>
+              </div>
             </div>
           </div>
         </div>

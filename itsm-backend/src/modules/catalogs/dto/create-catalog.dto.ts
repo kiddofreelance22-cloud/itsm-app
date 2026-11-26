@@ -28,6 +28,7 @@ export class CreateCatalogDto {
   @ApiPropertyOptional() @IsOptional() @IsString()  itemType?: string;
   @ApiPropertyOptional() @IsOptional() @IsInt()    priorityId?: number;
   @ApiPropertyOptional() @IsOptional() @IsInt()    impactId?: number;
+  @ApiPropertyOptional() @IsOptional() @IsInt()    serviceImpactId?: number;
   @ApiPropertyOptional() @IsOptional() @IsInt()    urgencyId?: number;
   @ApiPropertyOptional() @IsOptional() @IsString()  slaName?: string;
   @ApiPropertyOptional() @IsOptional() @IsArray()   tags?: string[];
@@ -43,6 +44,7 @@ export class CreateCatalogDto {
   // Time / cost
   @ApiPropertyOptional() @IsOptional() @IsInt()     estimatedTime?: number;
   @ApiPropertyOptional() @IsOptional() @IsInt()     deliveryTimeSla?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber()  estimatedCost?: number;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() hidePrice?: boolean;
   // Workflow
   @ApiPropertyOptional() @IsOptional() @IsInt()     workflowId?: number;

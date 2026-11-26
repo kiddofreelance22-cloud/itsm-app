@@ -51,7 +51,19 @@ export interface CreateUserDto {
 
 export type UpdateUserDto = Partial<CreateUserDto>;
 
+export interface UpdateMyProfileDto {
+  fullName?: string;
+  email?: string;
+  profilePhotoUrl?: string;
+}
+
 export const UsersApi = {
+  getMe: () => apiFetch<AdminUser>("/users/me"),
+  updateMe: (body: UpdateMyProfileDto) =>
+    apiFetch<AdminUser>("/users/me", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
   list: () => apiFetch<AdminUser[]>("/users"),
   getOne: (id: number) => apiFetch<AdminUser>(`/users/${id}`),
   create: (body: CreateUserDto) =>

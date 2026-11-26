@@ -4,6 +4,7 @@ import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateCol
 export class ServiceImpact {
   @PrimaryGeneratedColumn({ name: "service_impact_id" }) serviceImpactId!: number;
   @Column({ name: "impact_name", unique: true }) impactName!: string;
+  @Column({ type: "text", nullable: true }) description?: string | null;
   @Column({ name: "sort_order", default: 0 }) sortOrder!: number;
   @Column({ name: "is_default", default: false }) isDefault!: boolean;
   @Column({ name: "is_active", default: true }) isActive!: boolean;

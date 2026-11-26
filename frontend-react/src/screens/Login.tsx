@@ -3,10 +3,18 @@ import { ArrowLeft, Eye, EyeOff, Headphones, LockKeyhole, UserRound } from "luci
 import { useAuth } from "../AuthContext";
 import { useRouter } from "../router";
 import { API_BASE_URL } from "../api";
-import { incidentApi } from "../incidentApi";
+import { incidentApi, type SsoProvider } from "../incidentApi";
+
+const ssoErrorMessages: Record<string, string> = {
+  sso_failed: "Single sign-on could not be completed. Please try again.",
+  sso_user_not_found: "Your account was not found. Contact your administrator.",
+  sso_user_inactive: "Your account is inactive. Contact your administrator.",
+  sso_domain_not_allowed: "Your organization does not allow sign-in from this email domain.",
+  sso_email_unverified: "Verify your email address with your identity provider, then try again.",
+};
 
 export function LoginPage() {
-  const { login, ssoLogin, resetTemporaryPassword, clearError, error } = useAuth();
+  const { login, resetTemporaryPassword, clearError, error } = useAuth();
   const { navigate } = useRouter();
   const [mode, setMode] = useState<"login" | "reset">("login");
   const [username, setUsername] = useState("");
@@ -16,21 +24,26 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [ssoOn, setSsoOn] = useState(false);
+  const [ssoProviders, setSsoProviders] = useState<SsoProvider[]>([]);
   const [ssoError, setSsoError] = useState("");
 
-  // Is Microsoft sign-in configured? And are we returning from Microsoft with a one-time code (or an error)?
   useEffect(() => {
-    void incidentApi.ssoEnabled().then(setSsoOn);
-    const q = new URLSearchParams(window.location.search);
-    const code = q.get("sso_code"), err = q.get("sso_error");
-    if (code || err) window.history.replaceState({}, "", window.location.pathname);   // never leave the code in the address bar
-    if (err) setSsoError(err);
-    if (code) {
-      setSubmitting(true);
-      ssoLogin(code).then(() => navigate("/")).catch(() => undefined).finally(() => setSubmitting(false));
+    const errorCode = new URLSearchParams(window.location.search).get("error");
+    if (errorCode) {
+      setSsoError(ssoErrorMessages[errorCode] ?? ssoErrorMessages.sso_failed);
+      window.history.replaceState({}, "", window.location.pathname);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    let active = true;
+    incidentApi.ssoProviders().then((providers) => {
+      if (active) setSsoProviders(providers);
+    }).catch(() => {
+      if (active) setSsoProviders([]);
+    });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -157,14 +170,25 @@ export function LoginPage() {
           <button className="auth-submit" type="submit" disabled={submitting}>
             {submitting ? "Please wait…" : mode === "login" ? "Login" : "Reset Password"}
           </button>
-          {mode === "login" && ssoOn && (
+          {mode === "login" && ssoProviders.length > 0 && (
             <>
               <div style={{ textAlign: "center", color: "#98A2B3", fontSize: 12, margin: "14px 0 10px" }}>or</div>
-              <a className="auth-submit" href={`${API_BASE_URL}/auth/sso/azure/start`}
-                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, background: "#fff", color: "#344054", border: "1px solid #D0D5DD", textDecoration: "none" }}>
-                <svg width="18" height="18" viewBox="0 0 23 23" aria-hidden="true"><rect x="1" y="1" width="10" height="10" fill="#F25022" /><rect x="12" y="1" width="10" height="10" fill="#7FBA00" /><rect x="1" y="12" width="10" height="10" fill="#00A4EF" /><rect x="12" y="12" width="10" height="10" fill="#FFB900" /></svg>
-                Sign in with Microsoft
-              </a>
+              <div style={{ display: "grid", gap: 10 }}>
+                {ssoProviders.includes("google") && (
+                  <a className="auth-submit" href={`${API_BASE_URL}/auth/google/login`}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, background: "#fff", color: "#344054", border: "1px solid #D0D5DD", textDecoration: "none", boxShadow: "none" }}>
+                    <GoogleIcon />
+                    Continue with Google
+                  </a>
+                )}
+                {ssoProviders.includes("microsoft") && (
+                  <a className="auth-submit" href={`${API_BASE_URL}/auth/microsoft/login`}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, background: "#fff", color: "#344054", border: "1px solid #D0D5DD", textDecoration: "none", boxShadow: "none" }}>
+                    <MicrosoftIcon />
+                    Continue with Microsoft
+                  </a>
+                )}
+              </div>
             </>
           )}
         </form>
@@ -178,5 +202,27 @@ export function LoginPage() {
         <footer className="auth-footer">© 2026 ITSM Inc. All rights reserved.</footer>
       </div>
     </div>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z" />
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94a11.05 11.05 0 0 1-4.8 7.24l7.73 5.99c4.51-4.17 7.11-10.31 7.11-17.7Z" />
+      <path fill="#FBBC05" d="M10.53 28.59a14.39 14.39 0 0 1 0-9.18l-7.98-6.19a23.95 23.95 0 0 0 0 21.56l7.98-6.19Z" />
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.76l-7.73-5.99c-2.14 1.44-4.89 2.3-8.17 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48Z" />
+    </svg>
+  );
+}
+
+function MicrosoftIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 23 23" aria-hidden="true">
+      <path fill="#f25022" d="M1 1h10v10H1z" />
+      <path fill="#7fba00" d="M12 1h10v10H12z" />
+      <path fill="#00a4ef" d="M1 12h10v10H1z" />
+      <path fill="#ffb900" d="M12 12h10v10H12z" />
+    </svg>
   );
 }

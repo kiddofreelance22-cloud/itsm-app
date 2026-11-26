@@ -50,10 +50,10 @@ export interface AnalystDashboardStats {
   byStatus: { status: string; count: number }[];
   byType: { type: string; count: number; percent: number }[];
   myOpenIncidents: {
-    id: string; summary: string; priority: string; status: string; assignmentGroup: string; updatedAgo: string;
+    id: string; summary: string; priority: string; priorityColor?: string | null; status: string; assignmentGroup: string; updatedAgo: string;
   }[];
   myOpenRequests: {
-    id: string; summary: string; priority: string; status: string; assignmentGroup: string; updatedAgo: string;
+    id: string; summary: string; priority: string; priorityColor?: string | null; status: string; assignmentGroup: string; updatedAgo: string;
   }[];
   unassignedByGroup: { groupId: number; groupName: string; incidentCount: number; requestCount: number }[];
 }

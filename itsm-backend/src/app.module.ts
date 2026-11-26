@@ -29,10 +29,16 @@ import { ChangesModule } from "./modules/changes/changes.module";
 import { UploadsModule } from "./modules/uploads/uploads.module";
 import { ServiceCategoriesModule } from "./modules/service-categories/service-categories.module";
 import { ServiceImpactsModule } from "./modules/service-impacts/service-impacts.module";
+import { ServicePrioritiesModule } from "./modules/service-priorities/service-priorities.module";
+import { ServiceUrgenciesModule } from "./modules/service-urgencies/service-urgencies.module";
 import { ServiceCompletionsModule } from "./modules/service-completions/service-completions.module";
 import { RequestMastersModule } from "./modules/request-masters/request-masters.module";
+import { RequestConfigModule } from "./modules/request-config/request-config.module";
 import { IncidentConfigModule } from "./modules/incident-config/incident-config.module";
 import { ItsmConfigModule } from "./modules/itsm-config/itsm-config.module";
+import { ChatModule } from "./modules/chat/chat.module";
+import { KnowledgeModule } from "./modules/knowledge/knowledge.module";
+import { CsmModule } from "./modules/csm/csm.module";
 
 @Module({
   imports: [
@@ -47,8 +53,8 @@ import { ItsmConfigModule } from "./modules/itsm-config/itsm-config.module";
     DepartmentsModule,
     DashboardModule, TasksModule, ProblemsModule, ChangesModule,
     UploadsModule,
-    ServiceCategoriesModule, ServiceImpactsModule, ServiceCompletionsModule, RequestMastersModule,
-    IncidentConfigModule, ItsmConfigModule,
+    ServiceCategoriesModule, ServiceImpactsModule, ServicePrioritiesModule, ServiceUrgenciesModule, ServiceCompletionsModule, RequestMastersModule, RequestConfigModule,
+    IncidentConfigModule, ItsmConfigModule, ChatModule, KnowledgeModule, CsmModule,
   ],
 })
 export class AppModule {}

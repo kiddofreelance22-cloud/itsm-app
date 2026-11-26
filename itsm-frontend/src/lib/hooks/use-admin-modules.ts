@@ -3,9 +3,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useToast } from "./use-toast";
 import {
   StatusApi, PriorityApi, ImpactApi, UrgencyApi,
-  SubCategoryApi, AssignmentGroupApi, LocationApi, ServiceCategoryApi, ServiceImpactApi, ServiceCompletionApi, ClosureCodeApi, PendingReasonApi, PriorityMatrixApi, SlaServiceWindowApi,
+  SubCategoryApi, AssignmentGroupApi, LocationApi, ServiceCategoryApi, ServiceImpactApi, ServicePriorityApi, ServiceUrgencyApi, RequestSlaServiceWindowApi, ServiceCompletionApi, ClosureCodeApi, PendingReasonApi, RequestPendingReasonApi, PriorityMatrixApi, SlaServiceWindowApi,
 } from "@/lib/api/admin-modules.api";
-import { Status, Priority, Impact, Urgency, SubCategory, AssignmentGroup, Location, ServiceCategory, ServiceImpact, ServiceCompletion, ClosureCode, PendingReason, PriorityMatrix, SlaServiceWindow } from "@/types/admin";
+import { Status, Priority, Impact, Urgency, SubCategory, AssignmentGroup, Location, ServiceCategory, ServiceImpact, ServicePriority, ServiceUrgency, RequestSlaServiceWindow, ServiceCompletion, ClosureCode, PendingReason, RequestPendingReason, PriorityMatrix, SlaServiceWindow } from "@/types/admin";
 
 type AdminPayload = Record<string, unknown>;
 type AdminApi<T> = {
@@ -80,5 +80,9 @@ export const useAdminServiceImpact = makeHook<ServiceImpact>(ServiceImpactApi);
 export const useAdminServiceCompletion = makeHook<ServiceCompletion>(ServiceCompletionApi);
 export const useAdminClosureCode = makeHook<ClosureCode>(ClosureCodeApi);
 export const useAdminPendingReason = makeHook<PendingReason>(PendingReasonApi);
+export const useAdminRequestPendingReason = makeHook<RequestPendingReason>(RequestPendingReasonApi);
 export const useAdminPriorityMatrix = makeHook<PriorityMatrix>(PriorityMatrixApi);
 export const useAdminSlaServiceWindow = makeHook<SlaServiceWindow>(SlaServiceWindowApi);
+export const useAdminServicePriority = makeHook<ServicePriority>(ServicePriorityApi);
+export const useAdminServiceUrgency = makeHook<ServiceUrgency>(ServiceUrgencyApi);
+export const useAdminRequestSlaServiceWindow = makeHook<RequestSlaServiceWindow>(RequestSlaServiceWindowApi);

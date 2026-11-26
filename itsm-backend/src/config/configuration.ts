@@ -20,6 +20,25 @@ export default () => ({
     expiresIn: process.env.JWT_EXPIRES_IN || "1d",
   },
 
+  sso: {
+    frontendUrl: process.env.SSO_FRONTEND_URL,
+    backendUrl: process.env.SSO_BACKEND_URL,
+    allowedDomains: process.env.SSO_ALLOWED_DOMAINS || "",
+    autoProvision: process.env.SSO_AUTO_PROVISION === "true",
+    defaultRoleId: process.env.SSO_DEFAULT_ROLE_ID
+      ? parseInt(process.env.SSO_DEFAULT_ROLE_ID, 10)
+      : undefined,
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    },
+    microsoft: {
+      clientId: process.env.MICROSOFT_CLIENT_ID,
+      clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
+      tenantId: process.env.MICROSOFT_TENANT_ID,
+    },
+  },
+
   mail: {
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT || "587", 10),
@@ -28,5 +47,13 @@ export default () => ({
     password: process.env.SMTP_PASSWORD || process.env.SMTP_PASS,
     fromName: process.env.SMTP_FROM_NAME || "ITSM Support",
     fromAddress: process.env.SMTP_FROM_ADDRESS || process.env.SMTP_USER,
+  },
+
+  chat: {
+    apiKey: process.env.OPENAI_API_KEY || "",
+    baseUrl: process.env.OPENAI_BASE_URL || "http://127.0.0.1:11434/v1",
+    model: process.env.CHAT_MODEL || "qwen2.5:3b",
+    timeoutMs: parseInt(process.env.CHAT_TIMEOUT_MS || "90000", 10),
+    knowledgeDir: process.env.CHAT_KNOWLEDGE_DIR || "./knowledge",
   },
 });

@@ -1,13 +1,18 @@
 import { api, setToken } from "./api";
 import type { FieldVisibility, Incident, IncidentMessage, Priority, Resolver, Role, Status, User } from "./types";
+import type { LinkCandidate, LinkCandidateQuery, RelatedLink } from "./requestsApi";
 
 interface BackendUser {
   userId: number;
   username: string;
   email: string;
   fullName: string;
+  profilePhotoUrl?: string;
   roles?: string[];
   phone?: string;
+  impersonatedBy?: { userId: number; fullName: string };
+  impersonationId?: string;
+  expiresAt?: number;
 }
 
 interface BackendIncident {
@@ -64,8 +69,10 @@ interface BackendCategory {
   isActive?: boolean;
 }
 
+export type SsoProvider = "google" | "microsoft";
+
 function normalizeRole(roles: string[] = []): Role {
-  if (roles.some((role) => ["Admin", "Administrator"].includes(role))) return "ADMIN";
+  if (roles.some((role) => ["admin", "administrator"].includes(role.trim().toLowerCase()))) return "ADMIN";
   // Admin-defined roles ("IT Engineer", "L2 Support Analyst", ...) have free-form names,
   // so match on the words that make a role a resolver. Keep in sync with roles.util.ts in the backend.
   if (roles.some((role) => /(engineer|agent|analyst|support|resolver|fulfiller|technician|specialist|desk|manager)/i.test(role))) {
@@ -78,11 +85,16 @@ function mapUser(raw: BackendUser): User {
   const roles = raw.roles ?? [];
   return {
     id: String(raw.userId),
+    username: raw.username,
     email: raw.email,
     name: raw.fullName,
+    profilePhotoUrl: raw.profilePhotoUrl,
     role: normalizeRole(roles),
     roles,
     workgroup: null,
+    actingAs: raw.impersonatedBy,
+    impersonationId: raw.impersonationId,
+    supportExpiresAt: raw.expiresAt,
   };
 }
 
@@ -161,14 +173,15 @@ export const incidentApi = {
     return { token: result.accessToken, user: mapUser(result.user) };
   },
 
-  /** Completes "Sign in with Microsoft": swaps the one-time code from the redirect for a normal session. */
+  /** Exchanges the short-lived single-use code for the normal auth response. */
   async ssoExchange(code: string): Promise<{ token: string; user: User }> {
     const result = await api.post<{ accessToken: string; user: BackendUser }>("/auth/sso/exchange", { code });
     return { token: result.accessToken, user: mapUser(result.user) };
   },
 
-  async ssoEnabled(): Promise<boolean> {
-    try { return !!(await api.get<{ enabled: boolean }>("/auth/sso/azure/config")).enabled; } catch { return false; }
+  async ssoProviders(): Promise<SsoProvider[]> {
+    const result = await api.get<{ providers: SsoProvider[] }>("/auth/sso/providers");
+    return result.providers;
   },
 
   async resetTemporaryPassword(email: string, temporaryPassword: string, newPassword: string): Promise<{ token: string; user: User }> {
@@ -181,8 +194,22 @@ export const incidentApi = {
   },
 
   async currentUser(): Promise<{ user: User }> {
-    const result = await api.get<BackendUser>("/auth/me");
+    const result = await api.get<BackendUser & { impersonatedBy?: { userId: number; fullName: string }; impersonationId?: string; expiresAt?: number }>("/auth/me");
     return { user: mapUser(result) };
+  },
+
+  async switchUser(userId: number): Promise<{ token: string; user: User }> {
+    const result = await api.post<{ accessToken: string; impersonationId: string; expiresAt: number; user: BackendUser }>("/auth/switch-user", { userId });
+    return { token: result.accessToken, user: { ...mapUser(result.user), impersonationId: result.impersonationId, supportExpiresAt: result.expiresAt } };
+  },
+
+  async extendImpersonation(): Promise<{ token: string; user: User }> {
+    const result = await api.post<{ accessToken: string; impersonationId: string; expiresAt: number; user: BackendUser }>("/auth/extend-impersonation", {});
+    return { token: result.accessToken, user: { ...mapUser(result.user), impersonationId: result.impersonationId, supportExpiresAt: result.expiresAt } };
+  },
+
+  endImpersonation(impersonationId: string) {
+    return api.post<{ ended: boolean }>("/auth/end-impersonation", { impersonationId });
   },
 
   async createIncident(input: { shortDescription: string; description: string; categoryId: number | null; priority: Priority }) {
@@ -201,7 +228,7 @@ export const incidentApi = {
   },
 
   async allIncidents(roles: string[]) {
-    const route = roles.some((role) => ["Admin", "Administrator"].includes(role))
+    const route = roles.some((role) => ["admin", "administrator"].includes(role.trim().toLowerCase()))
       ? "/incidents/admin-list"
       : "/incidents/workgroup";
     const raw = await api.get<BackendIncident[]>(route);
@@ -226,6 +253,25 @@ export const incidentApi = {
   async releaseIncident(id: string) {
     const raw = await api.post<BackendIncident>(`/incidents/${encodeURIComponent(id)}/release`);
     return mapIncident(raw);
+  },
+
+  ticketLinks(id: string) {
+    return api.get<RelatedLink[]>(`/incidents/${encodeURIComponent(id)}/ticket-links`);
+  },
+
+  ticketLinkCandidates(id: string, query: LinkCandidateQuery) {
+    const params = new URLSearchParams(Object.entries(query)
+      .filter(([, value]) => value !== undefined && value !== "")
+      .map(([key, value]) => [key, String(value)]));
+    return api.get<{ items: LinkCandidate[]; note?: string }>(`/incidents/${encodeURIComponent(id)}/ticket-links/candidates?${params}`);
+  },
+
+  attachTicketLink(id: string, ticket: { type: LinkCandidate["type"]; targetNumber: string; relation?: string }) {
+    return api.post<RelatedLink[]>(`/incidents/${encodeURIComponent(id)}/ticket-links`, ticket);
+  },
+
+  removeTicketLink(id: string, linkId: number) {
+    return api.delete<RelatedLink[]>(`/incidents/${encodeURIComponent(id)}/ticket-links/${linkId}`);
   },
 
   async getIncident(id: string) {
@@ -332,4 +378,9 @@ export const incidentApi = {
 
 export function clearSession(): void {
   setToken(null);
+  try {
+    sessionStorage.removeItem("itsm_sidebar_scroll");
+  } catch {
+    // Storage unavailable.
+  }
 }

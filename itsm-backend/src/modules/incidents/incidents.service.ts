@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, Logger } from "@nestjs/common";
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, IsNull, LessThan, Not, In, Brackets } from "typeorm";
@@ -105,7 +105,26 @@ export class IncidentsService {
   }
 
   // ── Create ─────────────────────────────────────────────────────────────────
-  async create(createdByUserId: number, dto: CreateIncidentDto, actorRoles: string[] = []): Promise<Incident> {
+  async validateChatDraft(dto: CreateIncidentDto, actorRoles: string[] = []) {
+    const actorIsStaff = actorRoles.some((r) =>
+      ["Admin", "Administrator", "Fulfiller", "IT Agent", "IT Manager", "Service Desk", "Engineer", "Agent"].includes(r),
+    );
+    try {
+      await this.rules.applyLogIncidentFields(dto, actorIsStaff);
+      return { missingFields: [] as string[] };
+    } catch (error) {
+      if (!(error instanceof BadRequestException)) throw error;
+      const missing = /^Please fill in the required fields?: (.+)\.$/i.exec(error.message);
+      if (!missing) throw error;
+      return { missingFields: missing[1].split(/,\s*/) };
+    }
+  }
+
+  suggestPriority(impact: string, urgency: string): Promise<string | null> {
+    return this.rules.derivePriority(impact, urgency);
+  }
+
+  async create(createdByUserId: number, dto: CreateIncidentDto, actorRoles: string[] = [], trustedGroupId?: number): Promise<Incident> {
     const actorIsStaff = actorRoles.some((r) => ["Admin", "Administrator", "Fulfiller", "IT Agent", "IT Manager", "Service Desk", "Engineer", "Agent"].includes(r));
     // Anyone may pick the Caller (searchable field); the person who actually logged it is kept in loggedBy.
     dto = await this.rules.applyLogIncidentFields(dto, actorIsStaff);
@@ -157,7 +176,10 @@ export class IncidentsService {
     // requester's dto.assignmentGroupId is silently ignored rather than honored.
     const isFulfiller = actorRoles.includes("Admin") || actorRoles.includes("Administrator") || actorRoles.includes("Fulfiller") || actorRoles.includes("IT Agent") || actorRoles.includes("IT Manager") || actorRoles.includes("Service Desk");
     const canSetGroup = isFulfiller;
-    if (dto.assignmentGroupId && canSetGroup) {
+    if (trustedGroupId) {
+      incident.assignmentGroup = await this.groupRepo.findOne({ where: { groupId: trustedGroupId, isActive: true } }) || undefined;
+      if (!incident.assignmentGroup) throw new NotFoundException(`Assignment group ${trustedGroupId} not found`);
+    } else if (dto.assignmentGroupId && canSetGroup) {
       incident.assignmentGroup = await this.groupRepo.findOne({ where: { groupId: dto.assignmentGroupId } }) || undefined;
     }
     
@@ -171,6 +193,8 @@ export class IncidentsService {
     }
 
     if (dto.locationId) incident.location = await this.locationRepo.findOne({ where: { locationId: dto.locationId } }) || undefined;
+    // No location chosen: default to the caller's own location (matched by name) so tickets are routed and reported by site.
+    else if (createdBy?.location) incident.location = await this.locationRepo.createQueryBuilder("l").where("lower(l.locationName) = lower(:n)", { n: createdBy.location.trim() }).getOne() || undefined;
     if (dto.requestId) incident.request = await this.requestRepo.findOne({ where: { requestId: dto.requestId } }) || undefined;
     incident.createdBy = createdBy;
     if (dto.slaServiceWindowId && actorIsStaff) incident.slaServiceWindowId = dto.slaServiceWindowId;
@@ -215,13 +239,7 @@ export class IncidentsService {
 
   // ── Queue — unassigned incidents for a group ───────────────────────────────
   async getGroupQueue(groupId: number, actorId: number, actorRoles: string[] = []): Promise<Incident[]> {
-    const isAdmin = actorRoles.includes("Admin") || actorRoles.includes("Administrator");
-    if (!isAdmin) {
-      const isMember = await this.isGroupMember(groupId, actorId);
-      if (!isMember) {
-        throw new ForbiddenException("You are not a member of this assignment group.");
-      }
-    }
+    await this.assertCanJoinGroupQueue(groupId, actorId, actorRoles);
     return this.repo.find({
       where: {
         assignmentGroup: { groupId },
@@ -231,6 +249,13 @@ export class IncidentsService {
       relations: INCIDENT_RELATIONS,
       order: { createdAt: "DESC" },
     });
+  }
+
+  async assertCanJoinGroupQueue(groupId: number, actorId: number, actorRoles: string[] = []): Promise<void> {
+    const isAdmin = actorRoles.some((role) => ["Admin", "Administrator"].includes(role));
+    if (!isAdmin && !(await this.isGroupMember(groupId, actorId))) {
+      throw new ForbiddenException("You are not a member of this assignment group.");
+    }
   }
 
   /** Agent claims an unassigned incident from the queue. Only members of the
@@ -307,6 +332,19 @@ export class IncidentsService {
     );
 
     return this.findOne(saved.incidentId);
+  }
+
+  async createHandoverIncident(userId: number, summary: string, roles: string[] = []): Promise<Incident> {
+    const serviceDesks = (await this.groupRepo.find({ where: { isActive: true } }))
+      .filter((group) => group.groupName.trim().toLowerCase() === "service desk");
+    if (serviceDesks.length !== 1) {
+      throw new NotFoundException("Configure exactly one active Service Desk assignment group before enabling chatbot handover.");
+    }
+    return this.create(userId, {
+      title: "Chatbot handover to Service Desk",
+      description: summary,
+      assignmentGroupId: serviceDesks[0].groupId,
+    }, roles, serviceDesks[0].groupId);
   }
 
   /** Admin/Fulfiller assigns (or reassigns) which group owns this incident. */
@@ -524,9 +562,32 @@ export class IncidentsService {
     if (external && !isStaff(actorRoles)) this.assertRequesterMayPatch(incident, dto, actorId);
     const actor = actorId ? await this.userRepo.findOne({ where: { userId: actorId } }) || undefined : undefined;
 
+    const priorityOverrideReason = dto.priorityOverrideReason?.trim();
+    delete (dto as any).priorityOverrideReason;
+    const statusAfter = dto.status ?? incident.status;
+
+    // Resolved / Closed records are locked: only a status change (Reopen / Close) or the requester's closing feedback is accepted.
+    if (external && ["Resolved", "Closed"].includes(incident.status)) {
+      const allowed = new Set(["status", "closureCode", "feedbackRating", "feedbackComment", "resolutionNotes", "resolutionCode"]);
+      const edited = Object.entries(dto).filter(([k, v]) => v !== undefined && !allowed.has(k)).map(([k]) => k);
+      if (incident.status === "Closed" && Object.keys(dto).some((k) => (dto as any)[k] !== undefined && k !== "status")) {
+        throw new BadRequestException("This incident is Closed and locked. Raise a Reopen request instead.");
+      }
+      if (edited.length) {
+        throw new BadRequestException("This incident is Resolved and locked. Reopen it to change " + edited.join(", ") + ".");
+      }
+    }
+
+    // Priority is derived from Impact × Urgency. A manual override needs a written reason and is audited below.
     if ((dto.impact !== undefined || dto.urgency !== undefined) && dto.priority === undefined) {
       const derived = await this.rules.derivePriority(dto.impact ?? incident.impact, dto.urgency ?? incident.urgency);
       if (derived && derived !== incident.priority) dto.priority = derived;
+    } else if (external && dto.priority !== undefined && dto.priority !== incident.priority) {
+      const derived = await this.rules.derivePriority(dto.impact ?? incident.impact, dto.urgency ?? incident.urgency);
+      if (derived && derived !== dto.priority) {
+        if (!isStaff(actorRoles)) throw new ForbiddenException("Priority is calculated from Impact and Urgency and cannot be changed manually.");
+        if (!priorityOverrideReason) throw new BadRequestException(`Priority is calculated as "${derived}" from Impact and Urgency. Provide an override reason to set "${dto.priority}".`);
+      }
     }
 
     // ── Configuration-driven rules (reject BEFORE anything is changed) ──
@@ -558,6 +619,9 @@ export class IncidentsService {
       incident.slaPausedAt = null;
     }
     // Entering On Hold / Pending Customer: the chosen reason decides whether the clock pauses.
+    if (statusChanging && dto.status === "On Hold") {
+      this.rules.assertOnHoldReason(dto.onHoldReason !== undefined ? dto.onHoldReason : incident.onHoldReason);
+    }
     if (statusChanging && this.rules.isPausingStatus(dto.status!)) {
       const holdReason = dto.onHoldReason !== undefined ? dto.onHoldReason : incident.onHoldReason;
       const pendReason = dto.pendingReason !== undefined ? dto.pendingReason : incident.pendingReason;
@@ -565,6 +629,7 @@ export class IncidentsService {
     }
     if (statusChanging && dto.status === "Resolved") {
       await this.rules.assertResolveGates(incident.incidentId);
+      if (external) this.rules.assertResolutionNotes(dto.resolutionNotes, incident.resolutionNotes);
       if (external) await this.rules.assertResolutionCode(dto.resolutionCode, incident.resolutionCode);
     }
     if (dto.feedbackRating !== undefined && dto.feedbackRating !== incident.feedbackRating) {
@@ -622,8 +687,8 @@ export class IncidentsService {
 
     if (dto.priority && dto.priority !== incident.priority) {
       await this.logActivity(incident, actor, "priority_change",
-        `Priority changed from ${incident.priority} to ${dto.priority}.`,
-        { from: incident.priority, to: dto.priority }
+        `Priority changed from ${incident.priority} to ${dto.priority}.` + (priorityOverrideReason ? ` Override reason: ${priorityOverrideReason}` : ""),
+        { from: incident.priority, to: dto.priority, reason: priorityOverrideReason ?? null }
       );
       // Re-target Response & Resolution SLA (SLA Matrix override > Priority default),
       // still anchored to when the incident was created.
@@ -692,6 +757,46 @@ export class IncidentsService {
       void this.notifications.dispatch(`status:${dto.status}`, saved);
     }
     return saved;
+  }
+
+  /** Chat exposes only this additional requester edit; standard PATCH permissions remain unchanged. */
+  async updateContactFromChat(incidentId: string, contactNumber: string, actorId: number, actorRoles: string[] = []) {
+    const incident = await this.assertCanAccess(incidentId, actorId, actorRoles);
+    if (!isStaff(actorRoles) && incident.createdBy?.userId !== actorId) {
+      throw new ForbiddenException("Only the Caller of this incident can change its contact number.");
+    }
+    if (incident.status === "Closed") {
+      throw new BadRequestException("This incident is Closed and locked. Raise a Reopen request instead.");
+    }
+    if (incident.status === "Resolved") {
+      throw new BadRequestException("This incident is Resolved and locked. Reopen it to change contact number.");
+    }
+    const normalized = contactNumber.trim();
+    if (!/^\+?[0-9][0-9 ()-]{5,18}$/.test(normalized)) {
+      throw new BadRequestException("Contact Number must be a valid phone number (digits, spaces, + ( ) - only; 6-20 characters).");
+    }
+    incident.contactNumber = normalized;
+    const saved = await this.repo.save(incident);
+    const actor = await this.userRepo.findOne({ where: { userId: actorId } });
+    await this.logActivity(saved, actor ?? undefined, "comment", "Contact number updated.");
+    return saved;
+  }
+
+  async addChatComment(incidentId: string, actorId: number, content: string, isWorkNote: boolean, actorRoles: string[] = []) {
+    const incident = await this.assertCanAccess(incidentId, actorId, actorRoles);
+    if (incident.status === "Closed") {
+      throw new BadRequestException("This incident is Closed and locked. Raise a Reopen request instead.");
+    }
+    if (incident.status === "Resolved") {
+      throw new BadRequestException("This incident is Resolved and locked. Reopen it to add information.");
+    }
+    if (!content.trim() || content.length > 2000) {
+      throw new BadRequestException("The comment must be between 1 and 2000 characters.");
+    }
+    if (isWorkNote && !isStaff(actorRoles)) {
+      throw new ForbiddenException("Only authorized support staff can add internal work notes.");
+    }
+    return this.addComment(incidentId, actorId, content.trim(), isWorkNote, actorRoles);
   }
 
   async remove(incidentId: string): Promise<void> {

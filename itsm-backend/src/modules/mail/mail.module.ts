@@ -1,4 +1,7 @@
 import { Module, Global } from "@nestjs/common";
+import { TypeOrmModule } from "@nestjs/typeorm";
+import { EmailOutbox } from "./entities/email-outbox.entity";
+import { MailOutboxWorker } from "./mail-outbox.worker";
 import { MailService } from "./mail.service";
 
 /**
@@ -7,7 +10,8 @@ import { MailService } from "./mail.service";
  */
 @Global()
 @Module({
-  providers: [MailService],
+  imports: [TypeOrmModule.forFeature([EmailOutbox])],
+  providers: [MailService, MailOutboxWorker],
   exports: [MailService],
 })
 export class MailModule {}

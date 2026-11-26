@@ -1,3 +1,4 @@
+import { Link } from "../router";
 import React, { useMemo, useState } from "react";
 import { Pencil, Plus } from "lucide-react";
 import { api } from "../api";
@@ -26,6 +27,8 @@ export interface MasterListConfig {
   withVersions?: boolean;  // Status: v-badge + version history
   extraCreate?: Raw;       // constant fields sent on create (e.g. { type: "incident" })
   descriptionHint?: string;
+  /** A shortcut shown in the page header, e.g. { label: "Open Priority Matrix", to: "/config/admin/request-priority-matrix" }. */
+  headerLink?: { label: string; to: string };
 }
 
 type Unit = "Minutes" | "Hours" | "Days";
@@ -102,7 +105,7 @@ export function MasterListPage({ cfg }: { cfg: MasterListConfig }) {
   if (editing) {
     return (
       <>
-        <PageHeader crumb={cfg.crumb} title={cfg.title} subtitle={cfg.subtitle} />
+        <PageHeader crumb={cfg.crumb} title={cfg.title} subtitle={cfg.subtitle} action={cfg.headerLink && <Link className="btn-ghost" to={cfg.headerLink.to}>{cfg.headerLink.label}</Link>} />
         <div className="page-body">
           <form className="card admin-master-form-panel" onSubmit={save}>
             <div className="admin-master-form-heading">
@@ -246,7 +249,7 @@ export function MasterListPage({ cfg }: { cfg: MasterListConfig }) {
                       <td>
                         <div style={{ fontWeight: 600, fontSize: 13, color: "var(--ink)" }}>
                           {i[nameKey]}
-                          {cfg.path === "/priority" && i.color && <span aria-label={`${i.color} priority color`} title={`${i.color} priority color`} style={{ display: "inline-block", width: 9, height: 9, marginLeft: 8, borderRadius: "50%", verticalAlign: "middle", background: PRIORITY_COLOR_HEX[i.color] ?? "#98A2B3" }} />}
+                          {(cfg.path === "/priority" || cfg.path === "/service-priorities") && i.color && <span aria-label={`${i.color} priority color`} title={`${i.color} priority color`} style={{ display: "inline-block", width: 9, height: 9, marginLeft: 8, borderRadius: "50%", verticalAlign: "middle", background: PRIORITY_COLOR_HEX[i.color] ?? "#98A2B3" }} />}
                           {cfg.withVersions && <span className="chip" style={{ marginLeft: 8, fontSize: 11 }}>v{i.version ?? 1}</span>}
                         </div>
                         {i.description && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{i.description}</div>}
@@ -277,12 +280,13 @@ export function MasterListPage({ cfg }: { cfg: MasterListConfig }) {
 }
 
 const IM = "Configuration > Incident Masters >";
-const SC = "Configuration > SLA Configurations >";
+const SC = "Configuration > Incident SLA Configurations >";
+const SSLA = "Configuration > Service SLA Configurations >";
 const COLORS = ["Red", "Amber", "Blue", "Gray", "Green", "Purple"];
 
 export const WoChecklistPage = () => (
   <MasterListPage cfg={{ path: "/wo-checklist-items", crumb: `${IM} Incident Work Order Checklist`, title: "Incident Work Order Checklist", listTitle: "Incident Work Order Checklist", singular: "Checklist Item", nameLabel: "Checklist Item Name", withRequired: true,
-    subtitle: "Define the checks an agent must complete before a work order can be created from an incident." }} />
+    subtitle: "Define the checks an agent must complete on an incident before it can be resolved (required items block Resolve)." }} />
 );
 export const OnHoldReasonsPage = () => (
   <MasterListPage cfg={{ path: "/on-hold-reasons", crumb: `${IM} On Hold Reasons`, title: "On Hold Reasons", listTitle: "On Hold Reasons", singular: "On Hold Reason", nameLabel: "On Hold Reason Name", withSlaImpact: true,
@@ -311,6 +315,18 @@ export const UrgencyPage = () => (
 export const PriorityPage = () => (
   <MasterListPage cfg={{ path: "/priority", idKey: "priorityId", nameKey: "priorityName", orderKey: "order", crumb: `${SC} Priority`, title: "Priority", listTitle: "Priority Levels", singular: "Priority Level", nameLabel: "Priority Name", colorOptions: COLORS, withSla: true,
     searchPlaceholder: "Search priority levels…", subtitle: "Define the priority levels incidents are assigned, typically derived from Impact and Urgency." }} />
+);
+export const ServicePriorityPage = () => (
+  <MasterListPage cfg={{ path: "/service-priorities", idKey: "priorityId", nameKey: "priorityName", orderKey: "order", crumb: `${SSLA} Service Priority`, title: "Service Priority", listTitle: "Service Priority Levels", singular: "Service Priority", nameLabel: "Service Priority Name", colorOptions: COLORS, withSla: true,
+    searchPlaceholder: "Search service priorities…", subtitle: "Define the priority levels service requests are given. Separate from incident priorities." }} />
+);
+export const ServiceUrgencyPage = () => (
+  <MasterListPage cfg={{ path: "/service-urgencies", idKey: "urgencyId", nameKey: "urgencyName", orderKey: "order", crumb: `${SSLA} Service Urgency`, title: "Service Urgency", listTitle: "Service Urgency Levels", singular: "Service Urgency", nameLabel: "Service Urgency Name", colorOptions: COLORS,
+    searchPlaceholder: "Search service urgency levels…", subtitle: "Define how quickly a service request needs attention — used with Service Impact to derive priority. Separate from incident urgencies." }} />
+);
+export const RequestPendingReasonPage = () => (
+  <MasterListPage cfg={{ path: "/request-pending-reasons", idKey: "pendingReasonId", nameKey: "pendingReasonName", crumb: `${SSLA} Service Pending Reason`, title: "Service Request Pending Reason", listTitle: "Service Pending Reasons", singular: "Service Pending Reason", nameLabel: "Service Pending Reason Name", withSlaImpact: true,
+    searchPlaceholder: "Search service pending reasons…", subtitle: "Define why a service request is put on hold. Separate from incident pending reasons." }} />
 );
 export const StatusPage = () => (
   <MasterListPage cfg={{ path: "/status", idKey: "statusId", nameKey: "statusName", crumb: "Configuration > Others > Status Configuration", title: "Status Configuration", listTitle: "Statuses", singular: "Status", nameLabel: "Status Name", withVersions: true,

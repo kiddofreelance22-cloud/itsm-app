@@ -1,7 +1,10 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
 import * as nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
+import { EmailOutbox } from "./entities/email-outbox.entity";
 
 export interface SendMailOptions {
   to: string | string[];
@@ -21,7 +24,10 @@ export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
   private transporter: Transporter;
 
-  constructor(private config: ConfigService) {}
+  constructor(
+    private config: ConfigService,
+    @InjectRepository(EmailOutbox) private outboxRepo: Repository<EmailOutbox>
+  ) {}
 
   onModuleInit() {
     const host = this.config.get<string>("mail.host");
@@ -40,6 +46,12 @@ export class MailService implements OnModuleInit {
       host,
       port,
       secure,
+      pool: true,
+      maxConnections: 3,
+      maxMessages: 100,
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 30000,
       auth: {
         user,
         pass: password,
@@ -79,6 +91,17 @@ export class MailService implements OnModuleInit {
       );
       throw error;
     }
+
+  }
+
+  async queue(options: { to: string | string[]; subject: string; html?: string }): Promise<void> {
+    const recipients = Array.isArray(options.to) ? options.to : [options.to];
+    if (!recipients.length) return;
+    await this.outboxRepo.save(recipients.map((recipient) => this.outboxRepo.create({
+      recipient,
+      subject: options.subject,
+      html: options.html ?? "",
+    })));
   }
 
   /** First time login email with temporary password. */

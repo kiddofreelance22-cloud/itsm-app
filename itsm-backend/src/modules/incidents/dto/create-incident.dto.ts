@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsInt, IsOptional, IsString } from "class-validator";
+import { IsInt, IsOptional, IsString, Matches } from "class-validator";
 
 export class CreateIncidentDto {
   @ApiProperty({ example: "Outlook Error" })
@@ -19,7 +19,7 @@ export class CreateIncidentDto {
   @ApiPropertyOptional({ description: "SLA Service Window (staff only)" }) @IsOptional() @IsInt() slaServiceWindowId?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() affectedAsset?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() businessService?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() contactNumber?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @Matches(/^\+?[0-9][0-9 ()-]{5,18}$/, { message: "Contact Number must be a valid phone number (digits, spaces, + ( ) - only; 6-20 characters)." }) contactNumber?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() department?: string;
   @ApiPropertyOptional() @IsOptional() @IsInt() requestId?: number;
   @ApiPropertyOptional({ description: "Classification (Configuration > Classification)" }) @IsOptional() @IsInt() classificationId?: number;

@@ -151,12 +151,36 @@ export interface ServiceCategory {
 export interface ServiceImpact {
   serviceImpactId: number; impactName: string; sortOrder: number; isDefault: boolean; isActive: boolean;
 }
+export interface ServicePriority {
+  priorityId: number; priorityName: string; priorityCode: string;
+  description?: string; responseSlaMinutes?: number; resolutionSlaMinutes?: number;
+  order: number; color?: string; isActive: boolean;
+}
+export interface ServiceUrgency {
+  urgencyId: number; urgencyName: string; urgencyCode: string;
+  description?: string; order: number; color?: string; isActive: boolean;
+}
+export interface RequestSlaServiceWindow {
+  slaServiceWindowId: number; slaName: string; holidayCalendarLocation?: string;
+  useAnalystWorkLocation: boolean; timeZone: string; isDefault: boolean; isActive: boolean;
+  is24x7: boolean; serviceWindow: ServiceWindowDay[];
+}
 export interface ServiceCompletion {
   serviceCompletionId: number; completionName: string; description?: string;
   sortOrder: number; isDefault: boolean; isActive: boolean;
 }
 export interface ClosureCode { closureCodeId: number; closureCodeName: string; isActive: boolean; }
 export interface PendingReason { pendingReasonId: number; pendingReasonName: string; isActive: boolean; }
+export interface RequestPendingReason {
+  pendingReasonId: number;
+  pendingReasonName: string;
+  description?: string;
+  slaImpact?: "pause" | "continue";
+  isActive: boolean;
+  displayOrder?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
 export interface PriorityMatrix {
   priorityMatrixId: number; urgencyId: number; impactId: number; priorityId: number;
   urgency: Urgency; impact: Impact; priority: Priority; isActive: boolean;

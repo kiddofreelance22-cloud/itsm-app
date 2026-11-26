@@ -12,11 +12,17 @@ import { Type } from "class-transformer";
 import { CreateWorkflowStepDto } from "./create-workflow-step.dto";
 
 const WORKFLOW_STATUSES = ["draft", "active", "inactive"] as const;
+const WORKFLOW_SCOPES = ["service_request", "knowledge"] as const;
 
 export class CreateWorkflowDto {
   @ApiProperty({ example: "Laptop Request Approval" })
   @IsString()
   workflowName: string;
+
+  @ApiPropertyOptional({ default: "service_request", enum: WORKFLOW_SCOPES })
+  @IsOptional()
+  @IsIn(WORKFLOW_SCOPES)
+  workflowScope?: (typeof WORKFLOW_SCOPES)[number];
 
   @ApiPropertyOptional()
   @IsOptional()

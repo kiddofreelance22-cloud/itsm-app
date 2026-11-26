@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Paperclip, X } from "lucide-react";
+import { BookOpen, Paperclip, X } from "lucide-react";
 import { api } from "../api";
 import { useAuth } from "../AuthContext";
 import { useAsync } from "../hooks";
-import { useRouter } from "../router";
+import { Link, useRouter } from "../router";
 import { LogField, attachmentApi, checkAttachment, fmtBytes, logFieldApi } from "../configApi";
 import { ErrorBar, PageHeader, errMsg } from "../components/configKit";
 import { SearchSelect, type SearchOption } from "../components/SearchSelect";
 import { BrowsePicker, treeToNodes } from "../components/BrowsePicker";
+import { knowledgeApi, type KnowledgeSuggestion } from "../knowledgeApi";
 
 type Raw = Record<string, any>;
 interface CatNode { categoryId: number; categoryName: string; children: CatNode[]; defaultAssignmentGroup?: { groupId: number } | null }
@@ -33,7 +34,7 @@ export function CreateIncidentPage({ forUser = false }: { forUser?: boolean }) {
   const urgs = useAsync(() => api.get<Raw[]>("/urgency"), []);
   const groups = useAsync(() => api.get<Raw[]>("/assignment-groups"), []);
   const locs = useAsync(() => api.get<Raw[]>("/locations").catch(() => []), []);
-  const users = useAsync(() => (staff ? api.get<Raw[]>("/users").catch(() => []) : Promise.resolve([] as Raw[])), [staff]);
+  const users = useAsync(() => (staff ? api.get<Raw[]>("/users/assignable").catch(() => api.get<Raw[]>("/users").catch(() => [])) : Promise.resolve([] as Raw[])), [staff]);
 
   const cfg = useMemo(() => new Map((cfgQ.data ?? []).map((f: LogField) => [f.fieldKey, f])), [cfgQ.data]);
   const show = (k: string) => resolverMode || (cfg.get(k)?.visible ?? true);
@@ -70,8 +71,20 @@ export function CreateIncidentPage({ forUser = false }: { forUser?: boolean }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<null | { ref: string; id: string; priority: string; category: string; summary: string; on: string; failedFiles: string[] }>(null);
+  const [knowledgeSearch, setKnowledgeSearch] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }));
+  const incidentText = `${f.title} ${f.description}`.trim();
+  const knowledgeQueryReady = knowledgeSearch === incidentText.slice(0, 200);
+  const knowledgeMatches = useAsync(
+    () => knowledgeSearch ? knowledgeApi.suggestions(knowledgeSearch) : Promise.resolve([] as KnowledgeSuggestion[]),
+    [knowledgeSearch],
+  );
+
+  useEffect(() => {
+    const timer = setTimeout(() => setKnowledgeSearch(incidentText.length >= 3 ? incidentText.slice(0, 200) : ""), 300);
+    return () => clearTimeout(timer);
+  }, [incidentText]);
 
   const catList = useMemo(() => flatten(cats.data ?? []), [cats.data]);
   const catName = (id: string) => catList.find((c) => String(c.n.categoryId) === id)?.n.categoryName ?? "";
@@ -159,7 +172,7 @@ export function CreateIncidentPage({ forUser = false }: { forUser?: boolean }) {
         <form className="card" style={{ padding: 28 }} onSubmit={submit} noValidate>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
             <div className="field-group">{lbl("Caller", undefined, true)}
-              <SearchSelect ariaLabel="Caller" value={effectiveCallerId} label={callerShown} fetchOptions={searchCallers} clearable={resolverMode || !!f.callerId}
+              <SearchSelect ariaLabel="Caller" value={effectiveCallerId} label={callerShown} fetchOptions={searchCallers}
                 placeholder="Search by name, e-mail, employee ID or user name…"
                 onSelect={(o) => {
                   const u = o ? callerCache.current[o.value] : undefined;
@@ -213,6 +226,35 @@ export function CreateIncidentPage({ forUser = false }: { forUser?: boolean }) {
             )}
             <label className="field-group" style={{ gridColumn: "1 / -1" }}>{lbl("Short Description", undefined, true)}
               <input className="input" value={f.title} maxLength={200} onChange={(e) => set("title", e.target.value)} /></label>
+            {incidentText.length >= 3 && (
+              <section className="incident-knowledge-suggestions" aria-label="Suggested Knowledge Articles">
+                <div className="incident-knowledge-heading"><BookOpen size={16} /><strong>Suggested Knowledge Articles</strong>
+                  {knowledgeQueryReady && knowledgeMatches.data?.length ? <span>({knowledgeMatches.data.length})</span> : null}
+                </div>
+                <ErrorBar msg={knowledgeMatches.error ?? ""} />
+                {!knowledgeQueryReady || knowledgeMatches.loading ? (
+                  <div className="incident-knowledge-empty">Searching published knowledge…</div>
+                ) : knowledgeMatches.data?.length ? (
+                  <div className="incident-knowledge-list">
+                    {knowledgeMatches.data.map((article) => (
+                      <div className="incident-knowledge-row" key={article.articleId}>
+                        <Link to={`/knowledge/articles/${article.articleId}`} className="incident-knowledge-main">
+                          <span className="incident-knowledge-icon"><BookOpen size={15} /></span>
+                          <span className="incident-knowledge-copy">
+                            <strong>{article.title}</strong>
+                            <span>{article.articleCode} · {article.serviceLine ?? article.articleType} · {article.snippet}</span>
+                          </span>
+                        </Link>
+                        <span className="incident-knowledge-score">{article.score}% Match</span>
+                        <Link to={`/knowledge/articles/${article.articleId}`} className="btn-ghost btn-sm">View</Link>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="incident-knowledge-empty">No published articles match these keywords.</div>
+                )}
+              </section>
+            )}
             {show("description") && (
               <label className="field-group" style={{ gridColumn: "1 / -1" }}>{lbl("Description", "description")}
                 <textarea className="textarea" rows={4} value={f.description} onChange={(e) => set("description", e.target.value)} /></label>

@@ -3,20 +3,19 @@ import { useEffect, useRef, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import { getToken } from "@/lib/api/client";
 
-const rawWsUrl = process.env.NEXT_PUBLIC_WS_URL?.trim() ?? process.env.NEXT_PUBLIC_API_URL?.trim();
-// const WS_URL = rawWsUrl && rawWsUrl.length > 0 ? rawWsUrl : "http://50.6.45.238:3000";
-const WS_URL = rawWsUrl && rawWsUrl.length > 0 ? rawWsUrl : "http://50.6.45.238:3000";
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL?.trim() || undefined;
 
 let _socket: Socket | null = null;
 
 function getSocket(): Socket {
   if (!_socket || !_socket.connected) {
-    _socket = io(WS_URL, {
+    const options = {
       auth: { token: getToken() },
       transports: ["websocket", "polling"],
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
-    });
+    };
+    _socket = WS_URL ? io(WS_URL, options) : io(options);
   }
   return _socket;
 }

@@ -1,12 +1,13 @@
 import React from "react";
 import {
-  AlertCircle, Clipboard, GitBranch, Inbox, Layers, ListChecks, ThumbsUp, Wrench, type LucideIcon,
+  AlertCircle, Clipboard, GitBranch, Inbox, ThumbsUp, Wrench, type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { dashboardApi, type AnalystDashboardStats } from "../dashboardApi";
 import { useAsync } from "../hooks";
 import { Link } from "../router";
 import { workOrderApi, type WorkOrderRow } from "../configApi";
+import { PriorityBadge } from "../components/serviceRequestKit";
 
 function StatCard({
   icon: Icon,
@@ -65,7 +66,9 @@ function TicketList({
                 <small>{item.assignmentGroup} · Updated {item.updatedAgo}</small>
               </div>
               <div className="analyst-ticket-meta">
-                <span className={`analyst-priority priority-${item.priority.toLowerCase()}`}>{item.priority}</span>
+                {item.priorityColor
+                  ? <PriorityBadge name={item.priority} color={item.priorityColor} />
+                  : <span className={`analyst-priority priority-${item.priority.toLowerCase()}`}>{item.priority}</span>}
                 <span>{item.status}</span>
               </div>
             </div>
@@ -143,8 +146,8 @@ export function ResolverDashboardPage() {
   return (
     <div className="analyst-dashboard">
       <header className="analyst-dashboard-header">
-        <div className="breadcrumb">Analyst Workspace <span>›</span> Analyst Dashboard</div>
-        <h1>Analyst Dashboard</h1>
+        <div className="breadcrumb">Resolver Workspace <span>›</span> Resolver Dashboard</div>
+        <h1>Resolver Dashboard</h1>
         <p>Welcome back{user?.name ? `, ${user.name}` : ""} — your work items and key metrics.</p>
       </header>
 
@@ -156,22 +159,14 @@ export function ResolverDashboardPage() {
           { label: "Assigned to Me", value: value(stats?.incidents.mineOpen) },
           { label: "Resolved in Workgroups", value: value(stats?.incidents.totalResolvedInAllWorkgroups), tone: "positive" },
         ]} />
-        <StatCard icon={Clipboard} label="Service Requests" total={value(stats?.serviceRequests.total)} rows={[
+        <StatCard icon={Clipboard} label="Service Requests" total={value(stats?.serviceRequests.total)} to="/service-requests/queue" rows={[
           { label: "Open", value: value(stats?.serviceRequests.open) },
           { label: "In Progress", value: value(stats?.serviceRequests.inProgress) },
           { label: "Completed Today", value: value(stats?.serviceRequests.completedToday), tone: "positive" },
         ]} />
-        <StatCard icon={Layers} label="Problems" total={value(stats?.problems.total)} rows={[
-          { label: "Open", value: value(stats?.problems.open) },
-          { label: "In Progress", value: value(stats?.problems.inProgress) },
-        ]} />
-        <StatCard icon={GitBranch} label="Changes" total={value(stats?.changes.total)} rows={[
+        <StatCard icon={GitBranch} label="Changes" total={value(stats?.changes.total)} to="/changes" rows={[
           { label: "Open", value: value(stats?.changes.open) },
           { label: "In Progress", value: value(stats?.changes.inProgress) },
-        ]} />
-        <StatCard icon={ListChecks} label="Tasks" total={value(stats?.tasks.total)} rows={[
-          { label: "Open", value: value(stats?.tasks.open) },
-          { label: "Overdue", value: value(stats?.tasks.overdue), tone: (stats?.tasks.overdue ?? 0) > 0 ? "danger" : undefined },
         ]} />
         <StatCard icon={Wrench} label="Work Orders" total={woQ.loading ? "–" : openWos.length} to="/work-orders" rows={[
           { label: "Assigned to Me", value: woQ.loading ? "–" : myWos.length },
@@ -205,18 +200,25 @@ export function ResolverDashboardPage() {
       <section className="analyst-panel analyst-groups-panel">
         <div className="analyst-panel-heading">
           <h2><Inbox aria-hidden="true" size={16} /> Unassigned Tickets by Group</h2>
-          <Link to="/incident-queue">View Queue</Link>
+          <span style={{ display: "flex", gap: 14 }}>
+            <Link to="/incident-queue">Incident Queue</Link>
+            <Link to="/service-requests/queue?assignee=unassigned">Service Request Queue</Link>
+          </span>
         </div>
         {(stats?.unassignedByGroup ?? []).length === 0 ? (
           <div className="analyst-empty">Every group queue is clear. Nice work.</div>
         ) : (
           <div className="analyst-groups-grid">
             {stats?.unassignedByGroup.map((group) => (
-              <Link to="/incident-queue" className="analyst-group-card" key={group.groupId}>
+              <div className="analyst-group-card" key={group.groupId}>
                 <span>{group.groupName}</span>
                 <strong>{group.incidentCount + group.requestCount}</strong>
                 <small>unassigned tickets</small>
-              </Link>
+                <small style={{ display: "flex", gap: 10, marginTop: 4, fontSize: 11 }}>
+                  <Link to="/incident-queue" style={{ fontWeight: 700 }}>{group.incidentCount} incident{group.incidentCount === 1 ? "" : "s"}</Link>
+                  <Link to={`/service-requests/queue?assignee=unassigned&groupId=${group.groupId}`} style={{ fontWeight: 700 }}>{group.requestCount} request{group.requestCount === 1 ? "" : "s"}</Link>
+                </small>
+              </div>
             ))}
           </div>
         )}
@@ -224,7 +226,7 @@ export function ResolverDashboardPage() {
 
       <div className="analyst-ticket-grid">
         <TicketList title="My Open Incidents" to="/incident-queue" items={stats?.myOpenIncidents ?? []} />
-        <TicketList title="My Open Service Requests" items={stats?.myOpenRequests ?? []} />
+        <TicketList title="My Open Service Requests" to="/service-requests/queue" items={stats?.myOpenRequests ?? []} />
       </div>
 
       <div className="analyst-ticket-grid">

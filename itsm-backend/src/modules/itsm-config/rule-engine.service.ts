@@ -70,6 +70,10 @@ export class RuleEngineService {
   /** Statuses with no configured row (or an unconfigured `from`) are not restricted. */
   async assertTransitionAllowed(from: string, to: string): Promise<void> {
     if (from === to) return;
+    // Work must be picked up before it can be resolved or closed, whatever the matrix says.
+    if (["Open", "New"].includes(from) && ["Resolved", "Closed"].includes(to)) {
+      throw new BadRequestException(`Status cannot change from "${from}" to "${to}". Assign or start work on the incident first.`);
+    }
     const rows = await this.transitions.find({ where: { fromStatus: from } });
     if (!rows.length) return;
     const row = rows.find((r) => r.toStatus === to);
@@ -279,6 +283,17 @@ export class RuleEngineService {
     if (!active.some((c) => c.name.toLowerCase() === code.toLowerCase())) throw new BadRequestException(`"${code}" is not an active Resolution Code.`);
   }
 
+  /** On Hold must always carry a reason (it decides whether the SLA clock pauses). */
+  assertOnHoldReason(reason?: string | null): void {
+    if (!reason || !String(reason).trim()) throw new BadRequestException("Select an On Hold Reason before putting this incident On Hold.");
+  }
+
+  /** Resolution notes are mandatory when resolving (audit / knowledge reuse). */
+  assertResolutionNotes(provided?: string | null, existing?: string | null): void {
+    const notes = (provided !== undefined ? provided : existing)?.trim();
+    if (!notes) throw new BadRequestException("Resolution notes are required to resolve this incident.");
+  }
+
   /** Resolving needs every required checklist item done and no work order still open. */
   async assertResolveGates(incidentId: string): Promise<void> {
     const cl = await this.checklistFor(incidentId);
@@ -371,14 +386,32 @@ export class RuleEngineService {
   }
 
 
-  /** Priority from the Impact × Urgency matrix, or null when no active row maps that pair. */
+  /**
+   * Priority from the Impact × Urgency matrix. When the configured matrix has no active row for the pair
+   * (e.g. only a few of the 16 combinations were mapped) the standard ITIL grid is used instead, so an
+   * unmapped pair never silently degrades to "Medium".
+   */
   async derivePriority(impact?: string | null, urgency?: string | null): Promise<string | null> {
     if (!impact || !urgency) return null;
     const row = await this.priorityMatrix.createQueryBuilder("m")
       .innerJoinAndSelect("m.priority", "p").innerJoin("m.impact", "i").innerJoin("m.urgency", "u")
       .where("m.isActive = true AND p.isActive = true AND lower(i.impactName) = lower(:impact) AND lower(u.urgencyName) = lower(:urgency)", { impact, urgency })
       .getOne();
-    return row?.priority.priorityName ?? null;
+    if (row) return row.priority.priorityName;
+    return this.itilPriority(impact, urgency);
+  }
+
+  /** Standard ITIL grid (rank sum 2 → Critical, 3-4 → High, 5-6 → Medium, 7-8 → Low), limited to priorities that exist. */
+  private async itilPriority(impact: string, urgency: string): Promise<string | null> {
+    const rank = (v: string) => ({ critical: 1, high: 2, medium: 3, low: 4 } as Record<string, number>)[
+      v.replace(/^\s*\d+\s*-\s*/, "").trim().toLowerCase()];
+    const ri = rank(impact), ru = rank(urgency);
+    if (!ri || !ru) return null;
+    const sum = ri + ru;
+    const name = sum <= 2 ? "Critical" : sum <= 4 ? "High" : sum <= 6 ? "Medium" : "Low";
+    const p = await this.priorities.createQueryBuilder("p")
+      .where("lower(p.priorityName) = lower(:name) AND p.isActive = true", { name }).getOne();
+    return p?.priorityName ?? null;
   }
 
   // ── On Hold reason → SLA pause ───────────────────────────────────────────

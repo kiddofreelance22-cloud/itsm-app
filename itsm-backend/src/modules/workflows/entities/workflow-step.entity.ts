@@ -10,7 +10,7 @@ import { Workflow } from "./workflow.entity";
 import { Role } from "../../roles/entities/role.entity";
 import { ApprovalLevel } from "./approval-level.entity";
 
-export type WorkflowStepType = "approval" | "task" | "notification" | "condition" | "wait" | "subflow" | "update";
+export type WorkflowStepType = "approval" | "task" | "notification" | "condition" | "wait" | "subflow" | "update" | "record" | "integration";
 
 @Entity("workflow_steps")
 export class WorkflowStep {

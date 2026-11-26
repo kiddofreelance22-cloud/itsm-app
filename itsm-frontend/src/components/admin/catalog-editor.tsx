@@ -45,8 +45,8 @@ const FIELD_TYPES: { type: FieldType; label: string; Icon: React.ElementType; gr
   { type: "datetime",     label: "Date & Time",           Icon: Calendar,    group: "Advanced" },
   { type: "attachment",   label: "Attachment",            Icon: Paperclip,   group: "Advanced" },
   { type: "info",         label: "Info / Instructions",   Icon: Info,        group: "Advanced" },
-  { type: "user_lookup",  label: "User Lookup",           Icon: User,        group: "Reference" },
-  { type: "group_lookup", label: "Group Lookup",          Icon: Users,       group: "Reference" },
+  { type: "user_lookup",  label: "Person (User table)",   Icon: User,        group: "Reference" },
+  { type: "group_lookup", label: "Lookup (Source table)", Icon: Users,       group: "Reference" },
 ];
 const OPTION_BASED_TYPES: FieldType[] = ["dropdown", "multi_select", "checkbox", "radio"];
 
@@ -293,9 +293,27 @@ function VariableRow({
               </Field>
             </>
           )}
-          {(v.fieldType === "user_lookup" || v.fieldType === "group_lookup") && (
-            <Field label="Lookup Source (optional filter hint)" hint={v.fieldType === "user_lookup" ? "e.g. a department to narrow results" : "e.g. a group-name filter"}>
-              <TInput value={v.lookupSource ?? ""} onChange={(val) => onUpdate(v.variableId, { lookupSource: val })} />
+          {v.fieldType === "user_lookup" && (
+            <Field label="Source Table">
+              <div className="rounded-[4px] border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-700">
+                <strong>User table</strong> — Requesters search and select people from the User directory (name, email, employee ID).
+              </div>
+            </Field>
+          )}
+          {v.fieldType === "group_lookup" && (
+            <Field label="Source Table *" hint="Values are picked from this table (Location, Department, Email, etc.)">
+              <TSelect
+                value={v.lookupSource || "locations"}
+                onChange={(val) => onUpdate(v.variableId, { lookupSource: val })}
+              >
+                <option value="locations">Location</option>
+                <option value="departments">Department</option>
+                <option value="emails">Email (User email addresses)</option>
+                <option value="users">User (User table)</option>
+                <option value="groups">Assignment group</option>
+                <option value="categories">Service Category</option>
+                <option value="roles">Role</option>
+              </TSelect>
             </Field>
           )}
           {isOptionBased && (

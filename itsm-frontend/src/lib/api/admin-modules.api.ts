@@ -1,5 +1,5 @@
 import { apiFetch } from "./client";
-import { Status, Priority, Impact, Urgency, SubCategory, AssignmentGroup, Location, ServiceCategory, ServiceImpact, ServiceCompletion, ClosureCode, PendingReason, PriorityMatrix, SlaServiceWindow } from "@/types/admin";
+import { Status, Priority, Impact, Urgency, SubCategory, AssignmentGroup, Location, ServiceCategory, ServiceImpact, ServicePriority, ServiceUrgency, RequestSlaServiceWindow, ServiceCompletion, ClosureCode, PendingReason, RequestPendingReason, PriorityMatrix, SlaServiceWindow } from "@/types/admin";
 
 // ── Status ────────────────────────────────────────────────────────────────────
 export const StatusApi = {
@@ -105,6 +105,12 @@ export const PendingReasonApi = {
   update: (id: number, body: object) => apiFetch<PendingReason>(`/pending-reasons/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   remove: (id: number) => apiFetch<void>(`/pending-reasons/${id}`, { method: "DELETE" }),
 };
+export const RequestPendingReasonApi = {
+  list: () => apiFetch<RequestPendingReason[]>("/request-pending-reasons"),
+  create: (body: object) => apiFetch<RequestPendingReason>("/request-pending-reasons", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: number, body: object) => apiFetch<RequestPendingReason>(`/request-pending-reasons/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  remove: (id: number) => apiFetch<void>(`/request-pending-reasons/${id}`, { method: "DELETE" }),
+};
 export const PriorityMatrixApi = {
   list: () => apiFetch<PriorityMatrix[]>("/priority-matrices"),
   create: (body: object) => apiFetch<PriorityMatrix>("/priority-matrices", { method: "POST", body: JSON.stringify(body) }),
@@ -116,4 +122,22 @@ export const SlaServiceWindowApi = {
   create: (body: object) => apiFetch<SlaServiceWindow>("/sla-service-windows", { method: "POST", body: JSON.stringify(body) }),
   update: (id: number, body: object) => apiFetch<SlaServiceWindow>(`/sla-service-windows/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   remove: (id: number) => apiFetch<void>(`/sla-service-windows/${id}`, { method: "DELETE" }),
+};
+export const ServicePriorityApi = {
+  list: () => apiFetch<ServicePriority[]>("/service-priorities"),
+  create: (body: object) => apiFetch<ServicePriority>("/service-priorities", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: number, body: object) => apiFetch<ServicePriority>(`/service-priorities/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  remove: (id: number) => apiFetch<void>(`/service-priorities/${id}`, { method: "DELETE" }),
+};
+export const ServiceUrgencyApi = {
+  list: () => apiFetch<ServiceUrgency[]>("/service-urgencies"),
+  create: (body: object) => apiFetch<ServiceUrgency>("/service-urgencies", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: number, body: object) => apiFetch<ServiceUrgency>(`/service-urgencies/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  remove: (id: number) => apiFetch<void>(`/service-urgencies/${id}`, { method: "DELETE" }),
+};
+export const RequestSlaServiceWindowApi = {
+  list: () => apiFetch<RequestSlaServiceWindow[]>("/request-sla-service-windows"),
+  create: (body: object) => apiFetch<RequestSlaServiceWindow>("/request-sla-service-windows", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: number, body: object) => apiFetch<RequestSlaServiceWindow>(`/request-sla-service-windows/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  remove: (id: number) => apiFetch<void>(`/request-sla-service-windows/${id}`, { method: "DELETE" }),
 };

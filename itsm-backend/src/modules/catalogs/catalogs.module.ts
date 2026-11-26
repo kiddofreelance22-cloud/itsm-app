@@ -9,9 +9,11 @@ import { Category } from "../categories/entities/category.entity";
 import { SubCategory } from "../sub-category/entities/sub-category.entity";
 import { Workflow } from "../workflows/entities/workflow.entity";
 import { AssignmentGroup } from "../assignment-group/entities/assignment-group.entity";
-import { Priority } from "../priority/entities/priority.entity";
+import { ServicePriority } from "../service-priorities/entities/service-priority.entity";
 import { Impact } from "../impact/entities/impact.entity";
 import { Urgency } from "../urgency/entities/urgency.entity";
+import { ServiceUrgency } from "../service-urgencies/entities/service-urgency.entity";
+import { ServiceImpact } from "../service-impacts/entities/service-impact.entity";
 import { ServiceCategory } from "../service-categories/entities/service-category.entity";
 import { UploadsModule } from "../uploads/uploads.module";
 import { CatalogsService } from "./catalogs.service";
@@ -29,7 +31,7 @@ import { CatalogAttachmentsController } from "./attachments/catalog-attachments.
       Catalog, CatalogVariable, CatalogVariableOption,
       CatalogFormSection, CatalogAttachment,
       Category, SubCategory, Workflow, AssignmentGroup,
-      Priority, Impact, Urgency, ServiceCategory,
+      ServicePriority, Impact, Urgency, ServiceUrgency, ServiceImpact, ServiceCategory,
     ]),
     UploadsModule,
   ],

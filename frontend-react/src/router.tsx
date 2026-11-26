@@ -14,7 +14,7 @@ interface RouteMatch {
 
 interface RouterState {
   path: string;
-  navigate: (to: string) => void;
+  navigate: (to: string, options?: { replace?: boolean }) => void;
 }
 
 const RouterContext = createContext<RouterState | undefined>(undefined);
@@ -22,7 +22,10 @@ const RouterContext = createContext<RouterState | undefined>(undefined);
 export function RouterProvider({ children }: { children: React.ReactNode }) {
   const path = usePathname() || "/";
   const nextRouter = useNextRouter();
-  const navigate = (to: string) => nextRouter.push(to);
+  const navigate = (to: string, options?: { replace?: boolean }) => {
+    const method = options?.replace ? nextRouter.replace : nextRouter.push;
+    method(to, { scroll: false });
+  };
 
   return <RouterContext.Provider value={{ path, navigate }}>{children}</RouterContext.Provider>;
 }
@@ -62,9 +65,10 @@ export function Route({ path, children }: { path: string; children: React.ReactN
   return match ? <>{children}</> : null;
 }
 
-export function Link({ to, className, children, onClick, style }: {
+export function Link({ to, className, children, onClick, style, role }: {
   to: string;
   className?: string;
+  role?: string;
   children: React.ReactNode;
   onClick?: () => void;
   style?: React.CSSProperties;
@@ -72,9 +76,11 @@ export function Link({ to, className, children, onClick, style }: {
   return (
     <NextLink
       href={to}
+      scroll={false}
       className={className}
       style={style}
-      onClick={(e) => {
+      role={role}
+      onClick={() => {
         onClick?.();
       }}
     >

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { ApiError } from "../api";
 import { adminMasterApi } from "../adminMasterApi";
@@ -103,6 +103,18 @@ const definitions: Record<string, AdminMasterDefinition> = {
     fields: [
       { key: "pendingReasonName", label: "Pending Reason Name", required: true },
       { key: "description", label: "Description", type: "textarea" },
+      { key: "displayOrder", label: "Display Order", type: "number" },
+      activeField,
+    ],
+  },
+  "request-pending-reason": {
+    title: "Service Request Pending Reasons", description: "Define why a service request is placed on hold. Separate from incident pending reasons.",
+    endpoint: "/request-pending-reasons", idKey: "pendingReasonId", nameKey: "pendingReasonName",
+    columns: [{ key: "pendingReasonName", label: "Pending Reason" }, { key: "description", label: "Description" }, { key: "slaImpact", label: "SLA Impact" }, { key: "isActive", label: "Active", type: "checkbox" }],
+    fields: [
+      { key: "pendingReasonName", label: "Pending Reason Name", required: true },
+      { key: "description", label: "Description", type: "textarea" },
+      { key: "slaImpact", label: "SLA Impact", type: "select", options: ["pause", "continue"] },
       { key: "displayOrder", label: "Display Order", type: "number" },
       activeField,
     ],
@@ -247,10 +259,10 @@ const definitions: Record<string, AdminMasterDefinition> = {
     ],
   },
   workgroups: {
-    title: "Workgroups", description: "Define the workgroups incidents and work orders can be assigned or routed to.",
+    title: "Groups", description: "Create groups once and reuse them across incidents, service requests, changes, approvals, and assignments.",
     endpoint: "/assignment-groups", idKey: "groupId", nameKey: "groupName",
     columns: [
-      { key: "groupName", label: "Workgroup" }, { key: "manager", label: "Manager" },
+      { key: "groupName", label: "Group" }, { key: "manager", label: "Manager" },
       { key: "memberCount", label: "Members" }, { key: "isActive", label: "Status", type: "checkbox" },
       { key: "isDefault", label: "Default" }
     ],
@@ -296,24 +308,27 @@ function valueToFormString(value: unknown, type?: FieldType): string {
 export function AdminMasterPage() {
   const params = useRouteParams("/config/admin/:master");
   const { user } = useAuth();
-  const { navigate } = useRouter();
+  const { navigate, path } = useRouter();
+  const masterKey = params?.master === "groups" || path === "/config/admin/groups"
+    ? "workgroups"
+    : params?.master;
   
   // These have dedicated pages — skip rendering AdminMaster for them
   const dedicatedPages = new Set(["categories", "priority-matrix", "sla-matrix", "workgroup-sla"]);
-  if (params?.master && dedicatedPages.has(params.master)) return null;
+  if (masterKey && dedicatedPages.has(masterKey)) return null;
 
-  const definition = params ? definitions[params.master] : undefined;
-  const managementSection = ["users", "roles", "departments", "locations"].includes(params?.master ?? "")
+  const definition = masterKey ? definitions[masterKey] : undefined;
+  const managementSection = ["users", "roles", "departments", "locations", "workgroups"].includes(masterKey ?? "")
     ? "User Management"
-    : ["impact", "priority", "priority-matrix", "sla-service-window", "workgroup-sla", "urgency"].includes(params?.master ?? "")
+    : ["impact", "priority", "priority-matrix", "sla-service-window", "workgroup-sla", "urgency"].includes(masterKey ?? "")
       ? "SLA Configurations"
-      : params?.master === "workgroups"
-        ? "Others"
+      : masterKey === "workgroups"
+        ? "User Management"
         : "Incident Masters";
 
   // Masters that render as a numbered list (name + description rows) instead of a plain table
   const NUMBERED_MASTERS = new Set(["closure-code", "pending-reason", "resolution-code", "impact", "urgency", "priority", "sla-service-window"]);
-  const isNumbered = NUMBERED_MASTERS.has(params?.master ?? "");
+  const isNumbered = NUMBERED_MASTERS.has(masterKey ?? "");
 
   // Color chip mapping for Impact, Urgency, Priority
   const COLOR_MAP: Record<string, { bg: string; color: string; border: string }> = {
@@ -326,12 +341,12 @@ export function AdminMasterPage() {
   };
 
   // Name key for numbered list items
-  const numberedNameKey = params?.master === "closure-code" ? "closureCodeName"
-    : params?.master === "pending-reason" ? "pendingReasonName"
-    : params?.master === "resolution-code" ? "resolutionCodeName"
-    : params?.master === "urgency" ? "urgencyName"
-    : params?.master === "priority" ? "priorityName"
-    : params?.master === "sla-service-window" ? "slaName"
+  const numberedNameKey = masterKey === "closure-code" ? "closureCodeName"
+    : masterKey === "pending-reason" ? "pendingReasonName"
+    : masterKey === "resolution-code" ? "resolutionCodeName"
+    : masterKey === "urgency" ? "urgencyName"
+    : masterKey === "priority" ? "priorityName"
+    : masterKey === "sla-service-window" ? "slaName"
     : "impactName";
   const [items, setItems] = useState<AdminRecord[]>([]);
   const [form, setForm] = useState<AdminRecord>({});
@@ -434,7 +449,30 @@ export function AdminMasterPage() {
   };
 
   const [searchQuery, setSearchQuery] = useState("");
-  const isUsers = params?.master === "users";
+  const isUsers = masterKey === "users";
+
+  // Users table: optional columns the admin can switch on/off from the "Columns" menu.
+  const USER_COLUMNS = [
+    { key: "department", label: "Department" },
+    { key: "email", label: "Email" },
+    { key: "primaryRole", label: "Role" },
+    { key: "userType", label: "User Type" },
+    { key: "status", label: "Status" },
+  ] as const;
+  const [userCols, setUserCols] = useState<Record<string, boolean>>({
+    department: true, email: false, primaryRole: false, userType: true, status: true,
+  });
+  const [colsOpen, setColsOpen] = useState(false);
+  const colsRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!colsOpen) return;
+    const close = (e: MouseEvent) => {
+      if (colsRef.current && !colsRef.current.contains(e.target as Node)) setColsOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [colsOpen]);
+  const showCol = (key: string) => userCols[key] !== false;
 
   const filteredItems = items.filter((item) => {
     if (!searchQuery) return true;
@@ -474,7 +512,7 @@ export function AdminMasterPage() {
       </div>
       <div className="page-body">
         {error && <div className="admin-master-error" role="alert">{error}</div>}
-        {formOpen && params?.master === "workgroups" && (
+        {formOpen && masterKey === "workgroups" && (
           <WorkgroupForm
             key={editingId ?? "new"}
             item={editingId === null ? null : items.find((it) => Number(it[definition.idKey]) === editingId) ?? null}
@@ -482,7 +520,7 @@ export function AdminMasterPage() {
             onSaved={() => { setFormOpen(false); void loadItems(); }}
           />
         )}
-        {formOpen && params?.master !== "workgroups" && (
+        {formOpen && masterKey !== "workgroups" && (
           <form className="card admin-master-form-panel" onSubmit={save}>
             <div className="admin-master-form-heading">
               <h2>{editingId === null ? "Add record" : "Edit record"}</h2>
@@ -538,14 +576,14 @@ export function AdminMasterPage() {
             </div>
           </form>
         )}
-        <div className="card admin-master-table-wrap" style={{ overflow: "hidden", display: "flex", flexDirection: "column", maxWidth: 600, flex: 0 }}>
+        <div className="card admin-master-table-wrap" style={{ overflow: "hidden", display: "flex", flexDirection: "column", width: "100%", maxWidth: isUsers ? "none" : 600, flex: isUsers ? 1 : 0 }}>
           <div style={{ padding: "16px 20px", borderBottom: "1px solid #E4E7EC", flexShrink: 0 }}>
             <div className="proto-eyebrow">
               <div className="proto-eyebrow-title">
                 {isUsers
                   ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>&nbsp;</>
                   : null}
-                {definition.title.replace(" Management", "").toUpperCase()}S ( {loading ? "…" : items.length} )
+                {isUsers ? "USERS" : `${definition.title.replace(" Management", "").toUpperCase()}S`} ( {loading ? "…" : items.length} )
               </div>
               {isUsers ? (
                 <Link to="/config/admin/users/create" className="btn-primary admin-master-add">
@@ -572,12 +610,24 @@ export function AdminMasterPage() {
               />
             </div>
             {isUsers && (
-              <button className="columns-btn">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-                </svg>
-                Columns &#8964;
-              </button>
+              <div ref={colsRef} style={{ position: "relative" }}>
+                <button type="button" className="columns-btn" aria-haspopup="true" aria-expanded={colsOpen} onClick={() => setColsOpen((o) => !o)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                  </svg>
+                  Columns &#8964;
+                </button>
+                {colsOpen && (
+                  <div role="menu" style={{ position: "absolute", right: 0, top: 40, zIndex: 20, minWidth: 180, background: "#fff", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 8px 24px rgba(16,24,40,0.12)", padding: 8 }}>
+                    {USER_COLUMNS.map((c) => (
+                      <label key={c.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", fontSize: 12.5, cursor: "pointer" }}>
+                        <input type="checkbox" checked={showCol(c.key)} onChange={() => setUserCols((cur) => ({ ...cur, [c.key]: !showCol(c.key) }))} />
+                        {c.label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
           {loading ? (
@@ -591,9 +641,11 @@ export function AdminMasterPage() {
                 <thead><tr>
                   <th style={{ width: 48 }}></th>
                   <th>NAME</th>
-                  <th style={{ width: 200 }}>DEPARTMENT</th>
-                  <th style={{ width: 130 }}>USER TYPE</th>
-                  <th style={{ width: 100 }}>STATUS</th>
+                  {showCol("department") && <th style={{ width: 200 }}>DEPARTMENT</th>}
+                  {showCol("email") && <th style={{ width: 240 }}>EMAIL</th>}
+                  {showCol("primaryRole") && <th style={{ width: 160 }}>ROLE</th>}
+                  {showCol("userType") && <th style={{ width: 130 }}>USER TYPE</th>}
+                  {showCol("status") && <th style={{ width: 100 }}>STATUS</th>}
                   <th style={{ width: 50 }}></th>
                 </tr></thead>
                 <tbody>
@@ -620,13 +672,17 @@ export function AdminMasterPage() {
                             </div>
                           </div>
                         </td>
-                        <td style={{ fontSize: 12.5 }}>{dept}</td>
-                        <td style={{ fontSize: 12.5 }}>{userType}</td>
-                        <td>
-                          <span className={`status-pill ${isActive ? "active" : "inactive"}`}>
-                            {isActive ? "Active" : "Inactive"}
-                          </span>
-                        </td>
+                        {showCol("department") && <td style={{ fontSize: 12.5 }}>{dept}</td>}
+                        {showCol("email") && <td style={{ fontSize: 12.5 }}>{formatValue(item["email"])}</td>}
+                        {showCol("primaryRole") && <td style={{ fontSize: 12.5 }}>{formatValue(item["primaryRole"])}</td>}
+                        {showCol("userType") && <td style={{ fontSize: 12.5 }}>{userType}</td>}
+                        {showCol("status") && (
+                          <td>
+                            <span className={`status-pill ${isActive ? "active" : "inactive"}`}>
+                              {isActive ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                        )}
                         <td className="admin-master-actions">
                           <button className="admin-master-icon-button" title="Edit" aria-label={`Edit ${fullName}`} onClick={() => navigate(`/config/admin/users/${String(item.userId)}/edit`)}>
                             <Pencil aria-hidden="true" size={15} />
@@ -638,7 +694,7 @@ export function AdminMasterPage() {
                 </tbody>
               </table>
             </div>
-          ) : params?.master === "workgroups" ? (
+          ) : masterKey === "workgroups" ? (
             /* Workgroups-specific table matching prototype */
             <div style={{ padding: "0 20px 20px" }}>
               <table>
@@ -705,19 +761,19 @@ export function AdminMasterPage() {
                     <th style={{ textTransform: "uppercase", fontSize: 11, letterSpacing: "0.5px" }}>
                       {definition.columns[0].label}
                     </th>
-                    {params?.master === "priority" && (
+                    {masterKey === "priority" && (
                       <>
                         <th style={{ width: 140, textTransform: "uppercase", fontSize: 11, letterSpacing: "0.5px" }}>RESPONSE SLA</th>
                         <th style={{ width: 140, textTransform: "uppercase", fontSize: 11, letterSpacing: "0.5px" }}>RESOLUTION SLA</th>
                       </>
                     )}
-                    {params?.master === "sla-service-window" && (
+                    {masterKey === "sla-service-window" && (
                       <>
                         <th style={{ width: 140, textTransform: "uppercase", fontSize: 11, letterSpacing: "0.5px" }}>DAYS</th>
                         <th style={{ width: 180, textTransform: "uppercase", fontSize: 11, letterSpacing: "0.5px" }}>TIME</th>
                       </>
                     )}
-                    {(params?.master === "impact" || params?.master === "urgency" || params?.master === "priority") && (
+                    {(masterKey === "impact" || masterKey === "urgency" || masterKey === "priority") && (
                       <th style={{ width: 120, textTransform: "uppercase", fontSize: 11, letterSpacing: "0.5px" }}>COLOR</th>
                     )}
                     <th style={{ width: 110, textTransform: "uppercase", fontSize: 11, letterSpacing: "0.5px" }}>STATUS</th>
@@ -746,19 +802,19 @@ export function AdminMasterPage() {
                           <div style={{ fontWeight: 600, fontSize: 13, color: "var(--ink)" }}>{name}</div>
                           {desc !== "—" && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{desc}</div>}
                         </td>
-                        {params?.master === "priority" && (
+                        {masterKey === "priority" && (
                           <>
                             <td style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>{item["responseSlaMinutes"] ? rspSla : "—"}</td>
                             <td style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>{item["resolutionSlaHours"] ? resSla : "—"}</td>
                           </>
                         )}
-                        {params?.master === "sla-service-window" && (
+                        {masterKey === "sla-service-window" && (
                           <>
                             <td style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>{days}</td>
                             <td style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>{time}</td>
                           </>
                         )}
-                        {(params?.master === "impact" || params?.master === "urgency" || params?.master === "priority") && (
+                        {(masterKey === "impact" || masterKey === "urgency" || masterKey === "priority") && (
                           <td>
                             {colorStyle ? (
                               <span style={{

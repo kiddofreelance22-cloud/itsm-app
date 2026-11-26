@@ -6,6 +6,8 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Max,
+  Min,
   ValidateNested,
 } from "class-validator";
 import { Type } from "class-transformer";
@@ -86,6 +88,8 @@ export class CreateCatalogVariableDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() tooltipText?: string;
   @ApiPropertyOptional({ default: false }) @IsOptional() @IsBoolean() onlyIntegers?: boolean;
+  @ApiPropertyOptional({ description: "Longest text a requester may enter" }) @IsOptional() @IsInt() @Min(1) @Max(4000) maxLength?: number;
+  @ApiPropertyOptional({ default: false, description: "Dates before today are refused" }) @IsOptional() @IsBoolean() noPastDates?: boolean;
   @ApiPropertyOptional({ default: "end_user" }) @IsOptional() @IsString() updateBy?: string;
   @ApiPropertyOptional({ default: false }) @IsOptional() @IsBoolean() isUnique?: boolean;
   @ApiPropertyOptional({ default: false }) @IsOptional() @IsBoolean() displayInEmail?: boolean;

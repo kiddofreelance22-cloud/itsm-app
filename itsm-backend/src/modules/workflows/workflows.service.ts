@@ -1,16 +1,30 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { In, Repository } from "typeorm";
+import { In, IsNull, Not, Repository } from "typeorm";
 import { Workflow } from "./entities/workflow.entity";
 import { WorkflowStep } from "./entities/workflow-step.entity";
 import { WorkflowTransition } from "./entities/workflow-transition.entity";
 import { ApprovalLevel } from "./entities/approval-level.entity";
+import { WorkflowTask } from "./entities/workflow-task.entity";
+import { Catalog } from "../catalogs/entities/catalog.entity";
+import { KnowledgeArticle } from "../knowledge/entities/knowledge-article.entity";
+import { WorkflowStepTaskDto } from "./dto/workflow-step-tasks.dto";
 import { AssignmentGroup } from "../assignment-group/entities/assignment-group.entity";
 import { Role } from "../roles/entities/role.entity";
 import { CreateWorkflowDto } from "./dto/create-workflow.dto";
 import { UpdateWorkflowDto } from "./dto/update-workflow.dto";
 import { UpdateWorkflowTransitionsDto } from "./dto/update-workflow-transitions.dto";
 import { WorkflowStepApprovalLevelDto } from "./dto/workflow-step-approval-level.dto";
+
+export function workflowConditionValues(
+  variables: { label: string; value: string }[],
+  estimatedCost?: string | number | null,
+): { label: string; value: string }[] {
+  if (estimatedCost == null || variables.some((item) => item.label.trim().toLowerCase() === "estimated cost")) {
+    return variables;
+  }
+  return [...variables, { label: "Estimated cost", value: String(estimatedCost) }];
+}
 
 @Injectable()
 export class WorkflowsService {
@@ -24,6 +38,9 @@ export class WorkflowsService {
     private approvalLevelsRepo: Repository<ApprovalLevel>,
     @InjectRepository(Role) private rolesRepo: Repository<Role>
     ,@InjectRepository(AssignmentGroup) private assignmentGroupsRepo: Repository<AssignmentGroup>
+    ,@InjectRepository(WorkflowTask) private tasksRepo: Repository<WorkflowTask>
+    ,@InjectRepository(Catalog) private catalogsRepo: Repository<Catalog>
+    ,@InjectRepository(KnowledgeArticle) private knowledgeArticlesRepo: Repository<KnowledgeArticle>
   ) {}
 
   getActivityDefinitions() {
@@ -35,6 +52,8 @@ export class WorkflowsService {
       { type: "wait", label: "Wait / Timer", group: "Condition" },
       { type: "subflow", label: "Subflow", group: "Condition" },
       { type: "update", label: "Update Fields", group: "Condition" },
+      { type: "record", label: "Create related record", group: "Action" },
+      { type: "integration", label: "Run integration", group: "Integration" },
     ];
   }
 
@@ -49,8 +68,11 @@ export class WorkflowsService {
 
     const workflow = this.workflowsRepo.create({
       workflowName: dto.workflowName,
+      workflowScope: dto.workflowScope ?? "service_request",
       description: dto.description,
       isActive: dto.isActive ?? true,
+      status: dto.status ?? "draft",
+      version: dto.version ?? 1,
       requiresApproval: dto.requiresApproval ?? false,
       approverRole,
     });
@@ -65,8 +87,9 @@ export class WorkflowsService {
     return this.findOne(saved.workflowId);
   }
 
-  findAll(): Promise<Workflow[]> {
+  findAll(scope: "service_request" | "knowledge" = "service_request"): Promise<Workflow[]> {
     return this.workflowsRepo.find({
+      where: { workflowScope: scope },
       relations: { steps: { approverRole: true, approvalLevels: { customGroup: true } }, transitions: { fromStep: true, toStep: true }, approverRole: true },
       order: { workflowId: "ASC", steps: { stepOrder: "ASC" } },
     });
@@ -97,9 +120,70 @@ export class WorkflowsService {
     return this.findOne(workflowId);
   }
 
+  /** Catalog item names that use each workflow (as approval or fulfilment lifecycle). */
+  async usage(): Promise<Record<number, string[]>> {
+    const catalogs = await this.catalogsRepo.find({ relations: { workflow: true, fulfillmentWorkflow: true } });
+    const articles = await this.knowledgeArticlesRepo.find({
+      where: { lifecycleWorkflowId: Not(IsNull()) },
+      select: { articleCode: true, title: true, lifecycleWorkflowId: true },
+    });
+    const out: Record<number, string[]> = {};
+    for (const c of catalogs) {
+      for (const wf of [c.workflow, c.fulfillmentWorkflow]) {
+        if (!wf) continue;
+        (out[wf.workflowId] ??= []);
+        if (!out[wf.workflowId].includes(c.catalogName)) out[wf.workflowId].push(c.catalogName);
+      }
+    }
+    for (const article of articles) {
+      if (article.lifecycleWorkflowId == null) continue;
+      (out[article.lifecycleWorkflowId] ??= []);
+      const label = article.articleCode ?? article.title;
+      if (!out[article.lifecycleWorkflowId].includes(label)) out[article.lifecycleWorkflowId].push(label);
+    }
+    return out;
+  }
+
   async remove(workflowId: number): Promise<void> {
     const workflow = await this.findOne(workflowId);
+    const usedBy = (await this.usage())[workflowId] ?? [];
+    if (usedBy.length) {
+      const message = workflow.workflowScope === "knowledge"
+        ? `This Knowledge lifecycle is assigned to ${usedBy.join(", ")}. Unassign it from those articles first.`
+        : `This lifecycle is used by ${usedBy.join(", ")}. Give those catalog items another lifecycle first.`;
+      throw new BadRequestException(message);
+    }
     await this.workflowsRepo.remove(workflow);
+  }
+
+  // ---- task templates (instantiated as fulfilment tasks on each request) ----
+
+  private async taskStep(workflowId: number, workflowStepId: number): Promise<WorkflowStep> {
+    const step = await this.stepsRepo.findOne({ where: { workflowStepId, workflow: { workflowId } } });
+    if (!step) throw new NotFoundException(`Step ${workflowStepId} not found on workflow ${workflowId}`);
+    return step;
+  }
+
+  async getTasks(workflowId: number, workflowStepId: number): Promise<WorkflowTask[]> {
+    await this.taskStep(workflowId, workflowStepId);
+    return this.tasksRepo.find({ where: { activity: { workflowStepId } }, order: { workflowTaskId: "ASC" } });
+  }
+
+  async replaceTasks(workflowId: number, workflowStepId: number, tasks: WorkflowStepTaskDto[]): Promise<WorkflowTask[]> {
+    const step = await this.taskStep(workflowId, workflowStepId);
+    if (step.stepType !== "task") throw new BadRequestException("Only task steps have tasks");
+    for (const t of tasks) {
+      if (!t.taskName.trim()) throw new BadRequestException("Every task needs a name");
+      if (!t.assigneeId) throw new BadRequestException(`Choose who "${t.taskName}" is assigned to`);
+    }
+    await this.tasksRepo.delete({ activity: { workflowStepId } });
+    if (tasks.length) {
+      await this.tasksRepo.save(tasks.map((t) => this.tasksRepo.create({
+        activity: step, taskName: t.taskName.trim(), description: t.description?.trim() || undefined,
+        assigneeType: t.assigneeType, assigneeId: t.assigneeId, dueDateHours: t.dueDateHours ?? undefined, priority: t.priority ?? "medium",
+      })));
+    }
+    return this.getTasks(workflowId, workflowStepId);
   }
 
   // ---- steps sub-resource ----
@@ -294,6 +378,46 @@ export class WorkflowsService {
       level.referBackToRequestor = input.referBackToRequestor ?? false;
       level.referBackToPreviousApprovers = input.referBackToPreviousApprovers ?? false;
       level.customGroup = input.customGroupId ? groupsById.get(input.customGroupId) : undefined;
+      const onReject = input.onReject ?? (input.referBackToRequestor ? "rework" : input.referBackToPreviousApprovers ? "back" : "close");
+      const arg = (input.rejectArg ?? "").trim();
+      if (onReject === "escalate" && !/^(user|group|role|custom):\d+$/.test(arg)) {
+        throw new BadRequestException(`Level "${input.title}": choose who the rejection is escalated to`);
+      }
+      if (onReject === "rework" && arg && !["start", "this"].includes(arg)) {
+        throw new BadRequestException(`Level "${input.title}": a returned request resumes at "this" step or restarts from the "start"`);
+      }
+      const rule = input.approvalRule ?? "any";
+      if (input.approverType === "parallel") {
+        const list = input.approvers ?? [];
+        if (list.length < 2) throw new BadRequestException(`Level "${input.title}": a parallel approval needs at least two approvers`);
+        if (list.some((a) => a.type !== "requester_manager" && !a.ref)) throw new BadRequestException(`Level "${input.title}": every parallel approver must be chosen`);
+      } else if (input.approverType === "user" && rule !== "any") {
+        throw new BadRequestException(`Level "${input.title}": majority / all applies to groups and parallel approvals, not one person`);
+      }
+      const onApprove = input.onApprove ?? "next";
+      const aarg = (input.approveArg ?? "").trim();
+      if (onApprove === "auto" && (!aarg || aarg.length > 500)) throw new BadRequestException(`Level "${input.title}": write the resolution note the requester will see (up to 500 characters)`);
+      if (["step", "priority", "assign", "reroute", "task"].includes(onApprove) && !aarg) throw new BadRequestException(`Level "${input.title}": "If approved" needs a value for "${onApprove}"`);
+      if (onApprove === "notify" && !/^(user|group|role|custom):\d+$/.test(aarg)) throw new BadRequestException(`Level "${input.title}": choose who to notify`);
+      if (["step", "priority", "assign", "reroute"].includes(onApprove) && !/^\d+$/.test(aarg)) throw new BadRequestException(`Level "${input.title}": "If approved" needs a valid selection`);
+      level.onApprove = onApprove;
+      level.approveArg = ["next", "fulfil"].includes(onApprove) ? null : aarg.slice(0, 500);
+      const remind = input.remindDays ?? 0, timeout = input.timeoutDays ?? 0, onTimeout = input.onTimeout ?? "escalate";
+      const targ = (input.timeoutArg ?? "").trim();
+      if (timeout > 0 && onTimeout === "escalate" && !/^(user|group|role|custom):\d+$/.test(targ)) throw new BadRequestException(`Level "${input.title}": the timeout escalates, so choose who it is escalated to`);
+      if (remind > 0 && timeout > 0 && remind >= timeout) throw new BadRequestException(`Level "${input.title}": the reminder must come before the timeout`);
+      level.commentPolicy = input.commentPolicy ?? "reject";
+      level.allowReject = input.allowReject ?? true;
+      level.allowInfo = input.allowInfo ?? true;
+      level.allowDelegate = input.allowDelegate ?? false;
+      level.remindDays = remind; level.timeoutDays = timeout; level.onTimeout = onTimeout;
+      level.timeoutArg = timeout > 0 && onTimeout === "escalate" ? targ : null;
+      level.approvalRule = rule;
+      level.approvers = input.approverType === "parallel" ? input.approvers!.map((a) => ({ type: a.type, ref: a.type === "requester_manager" ? null : a.ref ?? null, label: a.label })) : null;
+      level.onReject = onReject;
+      level.rejectArg = onReject === "close" || onReject === "continue" ? null : arg || (onReject === "rework" ? "this" : null);
+      level.referBackToRequestor = onReject === "rework";
+      level.referBackToPreviousApprovers = onReject === "back";
       saved.push(level);
     }
 
@@ -393,33 +517,37 @@ export class WorkflowsService {
   }
 
   /** Used by RequestsService to advance a request through the workflow. */
-  async getFirstStep(workflowId: number, variables: { label: string; value: string }[] = []): Promise<WorkflowStep | null> {
-    const steps = await this.stepsRepo.find({
-      where: { workflow: { workflowId } },
-      order: { stepOrder: "ASC" },
-      relations: { approverRole: true },
-    });
-    const transitions = await this.transitionsRepo.find({
-      where: { workflow: { workflowId } },
-      relations: { fromStep: true, toStep: { approverRole: true } },
-    });
+  async loadGraph(workflowId: number): Promise<{ steps: WorkflowStep[]; transitions: WorkflowTransition[] }> {
+    const [steps, transitions] = await Promise.all([
+      this.stepsRepo.find({
+        where: { workflow: { workflowId } },
+        order: { stepOrder: "ASC" },
+        relations: { approverRole: true },
+      }),
+      this.transitionsRepo.find({
+        where: { workflow: { workflowId } },
+        relations: { fromStep: true, toStep: { approverRole: true } },
+      }),
+    ]);
+    return { steps, transitions };
+  }
+
+  async getFirstStep(
+    workflowId: number,
+    variables: { label: string; value: string }[] = [],
+    graph?: { steps: WorkflowStep[]; transitions: WorkflowTransition[] }
+  ): Promise<WorkflowStep | null> {
+    const { steps, transitions } = graph ?? await this.loadGraph(workflowId);
     return this.resolveConditionChain(steps[0] ?? null, steps, transitions, variables);
   }
 
   async getNextStep(
     workflowId: number,
     currentStepOrder: number,
-    variables: { label: string; value: string }[] = []
+    variables: { label: string; value: string }[] = [],
+    graph?: { steps: WorkflowStep[]; transitions: WorkflowTransition[] }
   ): Promise<WorkflowStep | null> {
-    const steps = await this.stepsRepo.find({
-      where: { workflow: { workflowId } },
-      order: { stepOrder: "ASC" },
-      relations: { approverRole: true },
-    });
-    const transitions = await this.transitionsRepo.find({
-      where: { workflow: { workflowId } },
-      relations: { fromStep: true, toStep: { approverRole: true } },
-    });
+    const { steps, transitions } = graph ?? await this.loadGraph(workflowId);
     const next = steps.find((s) => s.stepOrder > currentStepOrder) ?? null;
     return this.resolveConditionChain(next, steps, transitions, variables);
   }
@@ -438,6 +566,8 @@ export class WorkflowsService {
       const transition = transitions.find(
         (item) => item.fromStep.workflowStepId === current?.workflowStepId && item.branch === branch
       );
+      // A transition whose target is null means "finish the lifecycle here"; no transition means "continue to the next step".
+      if (transition && !transition.toStep) { current = null; break; }
       current = transition?.toStep ?? steps.find((step) => step.stepOrder > current!.stepOrder) ?? null;
     }
     return current;
@@ -445,7 +575,12 @@ export class WorkflowsService {
 
   private evaluateCondition(expression: string | undefined, variables: { label: string; value: string }[]): boolean {
     if (!expression?.trim()) return false;
-    const operators = [" not equals ", " equals ", " contains ", " is true", " is false", " >= ", " <= ", " != ", " == ", " > ", " < "];
+    const operators = [
+      " is greater than ", " is less than ", " is at least ", " is at most ",
+      " not equals ", " equals ", " contains ", " is true", " is false",
+      " is empty", " is not empty",
+      " >= ", " <= ", " != ", " == ", " > ", " < "
+    ];
     const lower = expression.toLowerCase();
     const operator = operators.find((candidate) => lower.includes(candidate));
     if (!operator) return false;
@@ -455,16 +590,23 @@ export class WorkflowsService {
     const actual = variables.find((item) => item.label.toLowerCase() === label.toLowerCase())?.value ?? "";
     const left = actual.toLowerCase();
     const right = expected.toLowerCase();
+    const cleanNum = (val: string) => {
+      const num = Number(val.replace(/[^0-9.-]+/g, ""));
+      return Number.isNaN(num) ? 0 : num;
+    };
+
     switch (operator.trim()) {
       case "equals": case "==": return left === right;
       case "not equals": case "!=": return left !== right;
       case "contains": return left.includes(right);
       case "is true": return ["true", "yes", "1"].includes(left);
       case "is false": return ["false", "no", "0", ""].includes(left);
-      case ">": return Number(actual) > Number(expected);
-      case "<": return Number(actual) < Number(expected);
-      case ">=": return Number(actual) >= Number(expected);
-      case "<=": return Number(actual) <= Number(expected);
+      case "is empty": return actual.trim() === "";
+      case "is not empty": return actual.trim() !== "";
+      case "is greater than": case ">": return cleanNum(actual) > cleanNum(expected);
+      case "is less than": case "<": return cleanNum(actual) < cleanNum(expected);
+      case "is at least": case ">=": return cleanNum(actual) >= cleanNum(expected);
+      case "is at most": case "<=": return cleanNum(actual) <= cleanNum(expected);
       default: return false;
     }
   }

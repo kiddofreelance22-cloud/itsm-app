@@ -5,6 +5,8 @@ import { CurrentUser } from "../../../common/decorators/current-user.decorator";
 import { ParseIntPipe } from "../../../common/pipes/parse-int.pipe";
 import { ApprovalsService } from "./approvals.service";
 import { RequestActionDto } from "../dto/request-action.dto";
+import { CommentRequestDto, DelegateApprovalDto } from "../dto/request-lifecycle.dto";
+import type { Actor } from "../requests.service";
 
 @ApiTags("approvals")
 @ApiBearerAuth()
@@ -13,18 +15,30 @@ import { RequestActionDto } from "../dto/request-action.dto";
 export class ApprovalsController {
   constructor(private readonly approvalsService: ApprovalsService) {}
 
-  /** Approvals screen: requests waiting on the current user's role */
+  /** Approve Service Requests screen: waiting on me, plus what I already decided. */
   @Get()
-  findPending(@CurrentUser("userId") userId: number) {
-    return this.approvalsService.findPendingForUser(userId);
+  findForUser(@CurrentUser() user: Actor) {
+    return this.approvalsService.findForUser(user);
   }
 
   @Post(":requestId/action")
   act(
     @Param("requestId", ParseIntPipe) requestId: number,
-    @CurrentUser("userId") userId: number,
+    @CurrentUser() user: Actor,
     @Body() dto: RequestActionDto
   ) {
-    return this.approvalsService.act(requestId, userId, dto);
+    return this.approvalsService.act(requestId, user, dto);
+  }
+
+  /** The approver asks the requester a question. The request returns to this approver once it is answered. */
+  @Post(":requestId/request-info")
+  requestInfo(@Param("requestId", ParseIntPipe) requestId: number, @CurrentUser() user: Actor, @Body() dto: CommentRequestDto) {
+    return this.approvalsService.requestInfo(requestId, user, dto.comments);
+  }
+
+  /** The approver hands the approval to someone else, who then decides alone. */
+  @Post(":requestId/delegate")
+  delegate(@Param("requestId", ParseIntPipe) requestId: number, @CurrentUser() user: Actor, @Body() dto: DelegateApprovalDto) {
+    return this.approvalsService.delegate(requestId, user, dto.toUserId, dto.comments);
   }
 }

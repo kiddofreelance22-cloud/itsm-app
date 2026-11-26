@@ -22,8 +22,8 @@
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
     "migration:run:prod": "typeorm migration:run -d dist/database/data-source.js",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/database/data-source.ts",
-    "seed": "ts-node -r tsconfig-paths/register src/database/seeds/run-seed.ts",
-    "seed:prod": "node dist/database/seeds/run-seed.js",
+    "seed": "node -e \"console.log('Seeding is disabled. No static data will be created.');\"",
+    "seed:prod": "node -e \"console.log('Seeding is disabled. No static data will be created.');\"",
     "assign-default-group": "ts-node -r tsconfig-paths/register src/database/seeds/run-assign-default-group.ts",
     "check-incidents": "ts-node -r tsconfig-paths/register src/database/seeds/run-check-incidents.ts"
   },
@@ -46,6 +46,7 @@
     "joi": "^18.2.3",
     "ldapts": "^9.2.0",
     "nodemailer": "^7.0.5",
+    "openid-client": "^5.7.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",

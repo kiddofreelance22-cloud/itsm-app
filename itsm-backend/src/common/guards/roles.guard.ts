@@ -28,23 +28,25 @@ export class RolesGuard implements CanActivate {
       return false;
     }
 
-    const normalize = (role: string) =>
-      role === "Administrator" ? "Admin" : role;
+    const normalize = (role: string) => {
+      const normalized = role.trim().toLowerCase();
+      return normalized === "administrator" ? "admin" : normalized;
+    };
 
     const userRoles = user.roles.map(normalize);
     
     // "Fulfiller" / "Agent" mean "any resolver role". That includes admin-defined
     // roles such as "IT Engineer", recognised by name (see roles.util.ts).
-    const wantsFulfiller = requiredRoles.some((role) => ["Fulfiller", "Agent"].includes(normalize(role)));
-    if (wantsFulfiller && userRoles.some((role: string) => isStaffRoleName(role))) {
+    const wantsFulfiller = requiredRoles.some((role) => ["fulfiller", "agent"].includes(normalize(role)));
+    if (wantsFulfiller && userRoles.some((role: string) => role === "admin" || isStaffRoleName(role))) {
       return true;
     }
 
     // Expand "Fulfiller" to actual IT roles
     const expandedRequired = requiredRoles.flatMap((role) => {
       const normalized = normalize(role);
-      if (normalized === "Fulfiller") {
-        return ["IT Agent", "IT Manager", "Service Desk", "Admin"];
+      if (normalized === "fulfiller") {
+        return ["it agent", "it manager", "service desk", "admin"];
       }
       return [normalized];
     });

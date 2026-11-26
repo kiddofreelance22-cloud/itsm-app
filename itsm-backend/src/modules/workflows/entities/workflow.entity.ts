@@ -21,6 +21,9 @@ export class Workflow {
   @Column({ name: "workflow_name" })
   workflowName!: string;
 
+  @Column({ name: "workflow_scope", type: "varchar", length: 30, default: "service_request" })
+  workflowScope!: "service_request" | "knowledge";
+
   @Column({ nullable: true })
   description!: string;
 

@@ -1,12 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { Menu, ChevronDown, LogOut, User } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/hooks/use-auth";
+import { resolveAssetUrl } from "@/lib/api/client";
 
 interface AdminNavbarProps {
   onMenuClick: () => void;
@@ -46,6 +48,7 @@ export function AdminNavbar({ onMenuClick }: AdminNavbarProps) {
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 rounded-md py-1 pl-1 pr-2 text-sm hover:bg-[rgba(255,255,255,0.1)] transition-colors">
               <Avatar className="size-8">
+                <AvatarImage src={user?.profilePhotoUrl ? resolveAssetUrl(user.profilePhotoUrl) : undefined} alt="" />
                 <AvatarFallback className="bg-brand-600 text-white text-xs font-bold">
                   {initials}
                 </AvatarFallback>
@@ -66,10 +69,10 @@ export function AdminNavbar({ onMenuClick }: AdminNavbarProps) {
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <button className="w-full flex items-center gap-2 cursor-pointer">
+              <Link href="/profile">
                 <User className="size-4" />
                 My Profile
-              </button>
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild destructive>

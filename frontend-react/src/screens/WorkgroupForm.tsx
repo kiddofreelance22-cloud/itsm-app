@@ -10,7 +10,7 @@ interface UserOption { userId: number; fullName: string; username?: string; isAc
 
 const codeFrom = (name: string) => name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 50);
 
-/** Add / edit a workgroup, including who manages it and which engineers are its members. */
+/** Add / edit an application-wide group, including its manager and members. */
 export function WorkgroupForm({ item, onClose, onSaved }: { item: RecordData | null; onClose: () => void; onSaved: () => void }) {
   const groupId = item ? Number(item.groupId) : null;
   const existingMembers = useMemo(
@@ -42,7 +42,7 @@ export function WorkgroupForm({ item, onClose, onSaved }: { item: RecordData | n
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!name.trim()) { setError("Workgroup Name is required."); return; }
+    if (!name.trim()) { setError("Group Name is required."); return; }
     setSaving(true);
     setError("");
     try {
@@ -58,7 +58,7 @@ export function WorkgroupForm({ item, onClose, onSaved }: { item: RecordData | n
       else await adminMasterApi.update<RecordData>("/assignment-groups", groupId, { ...body, managerId: managerId ? Number(managerId) : null });
       onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Unable to save workgroup.");
+      setError(err instanceof ApiError ? err.message : "Unable to save group.");
     } finally {
       setSaving(false);
     }
@@ -67,12 +67,12 @@ export function WorkgroupForm({ item, onClose, onSaved }: { item: RecordData | n
   return (
     <form className="card admin-master-form-panel" onSubmit={submit}>
       <div className="admin-master-form-heading">
-        <h2>{groupId === null ? "Add workgroup" : "Edit workgroup"}</h2>
+        <h2>{groupId === null ? "Add group" : "Edit group"}</h2>
         <button type="button" className="admin-master-icon-button" aria-label="Close form" onClick={onClose}><X aria-hidden="true" size={16} /></button>
       </div>
       {error && <div className="admin-master-error" role="alert">{error}</div>}
       <div className="admin-master-form-grid">
-        <label className="field-group"><span className="lbl">Workgroup Name<span className="req"> *</span></span>
+        <label className="field-group"><span className="lbl">Group Name<span className="req"> *</span></span>
           <input className="input" required value={name} onChange={(e) => setName(e.target.value)} /></label>
         <label className="field-group"><span className="lbl">Manager</span>
           <select className="select" value={managerId} onChange={(e) => setManagerId(e.target.value)}>
@@ -82,8 +82,8 @@ export function WorkgroupForm({ item, onClose, onSaved }: { item: RecordData | n
         <label className="field-group admin-master-wide"><span className="lbl">Description</span>
           <textarea className="textarea" value={description} onChange={(e) => setDescription(e.target.value)} /></label>
         <div className="field-group admin-master-wide">
-          <span className="lbl">Engineers ({memberIds.length} selected)</span>
-          <input className="input" placeholder="Search engineers…" value={filter} onChange={(e) => setFilter(e.target.value)} style={{ marginBottom: 8 }} />
+          <span className="lbl">Members ({memberIds.length} selected)</span>
+          <input className="input" placeholder="Search users…" value={filter} onChange={(e) => setFilter(e.target.value)} style={{ marginBottom: 8 }} />
           <div style={{ maxHeight: 220, overflow: "auto", border: "1px solid #E4E7EC", borderRadius: 8, padding: "6px 10px" }}>
             {shown.length === 0 ? <div className="muted" style={{ padding: 8 }}>No users found.</div> : shown.map((u) => (
               <label key={u.userId} className="admin-master-check-label" style={{ display: "flex", gap: 8, padding: "4px 0" }}>
@@ -96,7 +96,7 @@ export function WorkgroupForm({ item, onClose, onSaved }: { item: RecordData | n
         <label className="field-group"><span className="admin-master-check-label">
           <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} /> Active</span></label>
         <label className="field-group"><span className="admin-master-check-label">
-          <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} /> Default Workgroup</span></label>
+          <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} /> Default Group</span></label>
       </div>
       <div className="admin-master-form-actions">
         <button type="button" className="btn-ghost" onClick={onClose}>Cancel</button>

@@ -119,6 +119,12 @@ export class CatalogVariable {
   @Column({ name: "tooltip_text", type: "text", nullable: true })
   tooltipText!: string;
 
+  @Column({ name: "max_length", type: "int", nullable: true })
+  maxLength?: number | null;
+
+  @Column({ name: "no_past_dates", type: "boolean", default: false })
+  noPastDates!: boolean;
+
   @Column({ name: "only_integers", type: "boolean", default: false })
   onlyIntegers!: boolean;
 

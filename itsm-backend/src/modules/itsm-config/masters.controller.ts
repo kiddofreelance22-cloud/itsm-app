@@ -6,7 +6,9 @@ import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { ParseIntPipe } from "../../common/pipes/parse-int.pipe";
-import { ChecklistTemplateDto, MasterItemDto, UpdateChecklistTemplateDto, UpdateMasterItemDto } from "./dto/itsm-config.dto";
+import {
+  ChecklistTemplateDto, MasterItemDto, UpdateChecklistTemplateDto, UpdateMasterItemDto, UpdateWoChecklistItemDto, WoChecklistItemDto,
+} from "./dto/itsm-config.dto";
 import { IncidentChecklist } from "./entities/incident-checklist.entity";
 import { WoChecklistItem } from "./entities/wo-checklist-item.entity";
 import { OnHoldReason } from "./entities/on-hold-reason.entity";
@@ -20,10 +22,10 @@ const cleanTasks = (tasks: ChecklistTemplateDto["tasks"]) => (tasks ?? []).map((
   taskName: t.taskName.trim(), taskStatus: t.taskStatus ?? "Optional", remarks: t.remarks ?? "", isActive: t.isActive ?? true,
 }));
 
-function createMasterController(path: string, entity: Type<any>, label: string, withSlaImpact = false, scoped = false): Type<any> {
+function createMasterController(path: string, entity: Type<any>, label: string, withSlaImpact = false, scoped = false, withRequired = false): Type<any> {
   // Checklist templates carry extra scope/task fields, so they validate against their own DTO.
-  const CreateDto: Type<any> = scoped ? ChecklistTemplateDto : MasterItemDto;
-  const UpdateDto: Type<any> = scoped ? UpdateChecklistTemplateDto : UpdateMasterItemDto;
+  const CreateDto: Type<any> = scoped ? ChecklistTemplateDto : withRequired ? WoChecklistItemDto : MasterItemDto;
+  const UpdateDto: Type<any> = scoped ? UpdateChecklistTemplateDto : withRequired ? UpdateWoChecklistItemDto : UpdateMasterItemDto;
   const vp = (expectedType: Type<any>) => new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true, expectedType });
   @ApiTags(path)
   @ApiBearerAuth()
@@ -44,6 +46,7 @@ function createMasterController(path: string, entity: Type<any>, label: string, 
         displayOrder: dto.displayOrder ?? Number(max?.max ?? 0) + 1,
         isActive: dto.isActive ?? true,
         ...(withSlaImpact ? { slaImpact: dto.slaImpact ?? "pause" } : {}),
+        ...(withRequired ? { isRequired: dto.isRequired ?? false } : {}),
         ...(scoped ? {
           groupId: dto.groupId ?? null, statusName: dto.statusName?.trim() || null, categoryId: dto.categoryId ?? null,
           includeSubCategories: dto.includeSubCategories ?? false, tasks: cleanTasks(dto.tasks),
@@ -61,6 +64,7 @@ function createMasterController(path: string, entity: Type<any>, label: string, 
       if (dto.displayOrder !== undefined) row.displayOrder = dto.displayOrder;
       if (dto.isActive !== undefined) row.isActive = dto.isActive;
       if (withSlaImpact && dto.slaImpact !== undefined) row.slaImpact = dto.slaImpact;
+      if (withRequired && dto.isRequired !== undefined) row.isRequired = dto.isRequired;
       if (scoped) {
         if (dto.groupId !== undefined) row.groupId = dto.groupId;
         if (dto.statusName !== undefined) row.statusName = dto.statusName?.trim() || null;
@@ -88,6 +92,6 @@ function createMasterController(path: string, entity: Type<any>, label: string, 
 }
 
 export const ChecklistsController = createMasterController("checklists", IncidentChecklist, "Checklist", false, true);
-export const WoChecklistItemsController = createMasterController("wo-checklist-items", WoChecklistItem, "Checklist item");
+export const WoChecklistItemsController = createMasterController("wo-checklist-items", WoChecklistItem, "Checklist item", false, false, true);
 export const OnHoldReasonsController = createMasterController("on-hold-reasons", OnHoldReason, "On hold reason", true);
 export const ResolutionCodesController = createMasterController("resolution-codes", ResolutionCode, "Resolution code");

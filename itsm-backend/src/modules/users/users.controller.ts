@@ -16,7 +16,8 @@ import { Roles } from "../../common/decorators/roles.decorator";
 import { ParseIntPipe } from "../../common/pipes/parse-int.pipe";
 import { UsersService } from "./users.service";
 import { CreateUserDto } from "./dto/create-user.dto";
-import { UpdateUserDto } from "./dto/update-user.dto";
+import { UpdateMyProfileDto, UpdateUserDto } from "./dto/update-user.dto";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
 
 @ApiTags("users")
 @ApiBearerAuth()
@@ -38,6 +39,31 @@ export class UsersController {
   @Get("directory")
   searchDirectory(@Query("q") q?: string) {
     return this.usersService.searchDirectory(q);
+  }
+
+  @Get("me")
+  getMyProfile(@CurrentUser() user) {
+    return this.usersService.findOne(user.userId);
+  }
+
+  @Patch("me")
+  updateMyProfile(@CurrentUser() user, @Body() dto: UpdateMyProfileDto) {
+    return this.usersService.updateMyProfile(user.userId, dto);
+  }
+
+  // Light-weight list (id, name, username) so analysts can pick an assignee for
+  // work orders and tickets. The full /users list stays Admin-only because it
+  // carries e-mail addresses and account details.
+  @Get("assignable")
+  @Roles("Admin", "Fulfiller")
+  listAssignable() {
+    return this.usersService.listAssignable();
+  }
+
+  @Get("switchable")
+  @Roles("Admin")
+  listSwitchable() {
+    return this.usersService.listSwitchable();
   }
 
   @Get()

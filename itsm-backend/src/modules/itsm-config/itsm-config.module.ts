@@ -1,3 +1,4 @@
+import { IncidentActivity } from "../incidents/entities/incident-activity.entity";
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { IncidentChecklist } from "./entities/incident-checklist.entity";
@@ -30,6 +31,7 @@ import { PendingReason } from "../request-masters/entities/pending-reason.entity
 import { PriorityMatrix } from "../request-masters/entities/priority-matrix.entity";
 import { SlaServiceWindow } from "../request-masters/entities/sla-service-window.entity";
 import { IncidentChecklistProgress, IncidentLink, RoleNavigationAccess, LogIncidentField, IncidentAttachment } from "./entities/incident-record.entities";
+import { RequestLink } from "../requests/entities/request-link.entity";
 import { NavigationAccessController } from "./incident-record.controller";
 import { WorkOrder as _WorkOrderRef } from "./entities/work-order.entity";
 import { RuleEngineService } from "./rule-engine.service";
@@ -53,6 +55,7 @@ import { SlaMatrixController, WorkgroupSlaWindowsController } from "./sla.contro
       WorkgroupSlaWindow, DirectorySource, DirectoryAttributeMapping, DirectorySyncRun,
       Incident, User, Role, UserRole, AssignmentGroup, Status, Priority, Category, Urgency, Impact,
       PendingReason, PriorityMatrix, SlaServiceWindow, IncidentChecklistProgress, IncidentLink, RoleNavigationAccess, LogIncidentField, IncidentAttachment,
+      RequestLink, IncidentActivity,
     ]),
   ],
   controllers: [

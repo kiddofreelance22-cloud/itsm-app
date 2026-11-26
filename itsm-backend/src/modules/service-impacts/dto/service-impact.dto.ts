@@ -3,6 +3,7 @@ import { IsBoolean, IsInt, IsOptional, IsString, MaxLength } from "class-validat
 
 export class CreateServiceImpactDto {
   @IsString() @MaxLength(100) impactName!: string;
+  @IsOptional() @IsString() description?: string | null;
   @IsOptional() @IsInt() sortOrder?: number;
   @IsOptional() @IsBoolean() isDefault?: boolean;
   @IsOptional() @IsBoolean() isActive?: boolean;

@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { incidentApi } from "../incidentApi";
+import { knowledgeApi } from "../knowledgeApi";
 import { PRIORITY_META, STATUS_META, formatDateTime } from "../fieldMeta";
 import { useAsync } from "../hooks";
 import { Link, useRouter } from "../router";
@@ -12,20 +13,12 @@ import type { Incident } from "../types";
 
 const PAGE_SIZE = 5;
 
-/* Announcements and knowledge-base articles have no backend endpoint yet, so
-   these are static placeholders. Replace with API calls when they exist. */
+/* Announcements have no backend endpoint yet, so these are static placeholders.
+   Replace with an API call when one exists. */
 const ANNOUNCEMENTS = [
   { title: "System maintenance", body: "Scheduled downtime on 18 May 2025, 12:00 AM to 02:00 AM.", date: "14 May 2025", tone: "blue" },
   { title: "New self-service portal", body: "We've added new features to improve your experience.", date: "14 May 2025", tone: "green" },
   { title: "Password policy update", body: "The password policy has changed. Please update your password regularly.", date: "10 May 2025", tone: "amber" },
-];
-
-const KB_ARTICLES = [
-  "How to reset your VPN password",
-  "Fix Outlook not syncing email",
-  "How to connect to Wi-Fi",
-  "Install software on Windows",
-  "Printer not responding",
 ];
 
 interface Tile {
@@ -78,10 +71,11 @@ export function EndUserDashboardPage() {
       : all;
   }, [incidentsQ.data, q]);
 
-  const articles = useMemo(
-    () => (q ? KB_ARTICLES.filter((a) => a.toLowerCase().includes(q)) : KB_ARTICLES),
-    [q],
-  );
+  const kbQ = useAsync(() => knowledgeApi.portalArticles(""), []);
+  const articles = useMemo(() => {
+    const all = kbQ.data ?? [];
+    return (q ? all.filter((a) => `${a.title} ${a.tags.join(" ")}`.toLowerCase().includes(q)) : all).slice(0, 5);
+  }, [kbQ.data, q]);
 
   const pageCount = Math.max(1, Math.ceil(incidents.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
@@ -272,12 +266,15 @@ export function EndUserDashboardPage() {
             <h2 id="kb"><BookOpen size={15} aria-hidden="true" /> Knowledge base</h2>
           </div>
           {articles.length === 0 ? (
-            <div className="empty-state" style={{ padding: "12px 16px 20px" }}>No articles match “{query}”.</div>
+            <div className="empty-state" style={{ padding: "12px 16px 20px" }}>
+              {kbQ.loading ? "Loading…" : q ? <>No articles match “{query}”. <Link to="/knowledge-base">Search the full Knowledge Base</Link></> : "No articles are published yet."}
+            </div>
           ) : (
             <ul className="dash-kb">
-              {articles.map((title) => (
-                <li key={title}><FilePlus2 size={14} aria-hidden="true" /> {title}</li>
+              {articles.map((a) => (
+                <li key={a.articleId}><Link to={`/knowledge-base/${a.articleId}`}><FilePlus2 size={14} aria-hidden="true" /> {a.title}</Link></li>
               ))}
+              <li><Link to="/knowledge-base">Browse all articles</Link></li>
             </ul>
           )}
         </section>

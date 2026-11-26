@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { AuthApi, LoginResponse } from "@/lib/api/auth.api";
-import { setSession, clearSession, getStoredUser, ApiError } from "@/lib/api/client";
+import { setSession, clearSession, getStoredUser, getToken, ApiError } from "@/lib/api/client";
 
 type AuthUser = LoginResponse["user"];
 
@@ -34,6 +34,8 @@ interface AuthContextValue {
   /** Check if user has a specific permission (format: "module:action") */
   hasPermission: (permission: string) => boolean;
   login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
+  completeLogin: (response: LoginResponse, rememberMe?: boolean) => void;
+  updateUser: (updates: Partial<AuthUser>) => void;
   logout: () => void;
 }
 
@@ -51,9 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const login = useCallback(
-    async (username: string, password: string, rememberMe = true) => {
-      const res = await AuthApi.login(username, password);
+  const completeLogin = useCallback(
+    (res: LoginResponse, rememberMe = true) => {
       setSession(res.accessToken, res.user, rememberMe);
       setUser(res.user);
 
@@ -68,6 +69,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [router]
   );
+
+  const login = useCallback(
+    async (username: string, password: string, rememberMe = true) => {
+      const res = await AuthApi.login(username, password);
+      completeLogin(res, rememberMe);
+    },
+    [completeLogin]
+  );
+
+  const updateUser = useCallback((updates: Partial<AuthUser>) => {
+    if (!user) return;
+    const updatedUser = { ...user, ...updates };
+    const token = getToken();
+    if (token) {
+      setSession(token, updatedUser, localStorage.getItem("itsm_token") !== null);
+    }
+    setUser(updatedUser);
+  }, [user]);
 
   const logout = useCallback(() => {
     clearSession();
@@ -133,6 +152,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isEngineer,
         hasPermission,
         login,
+        completeLogin,
+        updateUser,
         logout,
       }}
     >

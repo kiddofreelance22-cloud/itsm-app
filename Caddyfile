@@ -1,0 +1,15 @@
+ticketly.co.in {
+	encode zstd gzip
+
+	handle /socket.io/* {
+		reverse_proxy backend:4000
+	}
+
+	handle_path /api/* {
+		reverse_proxy backend:4000
+	}
+
+	handle {
+		reverse_proxy frontend-react:3000
+	}
+}

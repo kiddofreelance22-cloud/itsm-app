@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowUp, Eye, FileText, Pencil, Plus, Save, Trash2, Upload } from "lucide-react";
 import { API_BASE_URL } from "../api";
+import { Link } from "../router";
 import { ErrorBar, errMsg } from "../components/configKit";
 import { useAsync } from "../hooks";
 import {
@@ -17,10 +18,34 @@ import {
   type ServiceCatalogCategory,
 } from "../requestsApi";
 
+import {
+  LOOKUP_SOURCES,
+  DEFAULT_LOOKUP_SOURCE,
+  PERSON_SOURCE,
+  lookupSourceLabel,
+  normalizeLookupSource,
+} from "../lookupSources";
+import { LookupField } from "../components/LookupField";
+
 const FIELD_TYPES: CatalogFieldType[] = [
   "text", "textarea", "number", "dropdown", "checkbox", "date", "multi_select",
   "radio", "datetime", "attachment", "info", "user_lookup", "group_lookup",
 ];
+export const FIELD_TYPE_LABELS: Record<CatalogFieldType, string> = {
+  text: "Single-line text",
+  textarea: "Paragraph",
+  number: "Number",
+  dropdown: "Dropdown",
+  checkbox: "Checkbox",
+  date: "Date",
+  multi_select: "Checkbox group (Multi-select)",
+  radio: "Radio buttons",
+  datetime: "Date & Time",
+  attachment: "Attachment",
+  info: "Info box",
+  user_lookup: "Person (User table)",
+  group_lookup: "Lookup (Source table)",
+};
 const OPTION_FIELDS: CatalogFieldType[] = ["dropdown", "multi_select", "checkbox", "radio"];
 const TABS = ["Item details", "Form builder", "Preview", "Additional info"] as const;
 type EditorTab = (typeof TABS)[number];
@@ -72,7 +97,7 @@ const newCatalogDraft = (catalog: ServiceCatalog | null): CatalogPayload => ({
   catalogCode: catalog?.catalogCode ?? "",
   shortDescription: catalog?.shortDescription ?? "",
   description: catalog?.description ?? "",
-  serviceCategoryId: catalog?.serviceCategory?.serviceCategoryId ?? null,
+  serviceCategoryId: catalog?.serviceCategory?.serviceCategoryId ?? (!catalog && typeof window !== "undefined" ? Number(new URLSearchParams(window.location.search).get("category")) || null : null),
   isActive: catalog?.isActive ?? true,
   allowRequestedFor: catalog?.allowRequestedFor ?? true,
   itemType: catalog?.itemType ?? "Standard",
@@ -81,6 +106,8 @@ const newCatalogDraft = (catalog: ServiceCatalog | null): CatalogPayload => ({
   stage: catalog?.stage ?? "Production",
   priorityId: catalog?.priority?.priorityId ?? null,
   impactId: catalog?.impact?.impactId ?? null,
+  serviceImpactId: catalog?.serviceImpact?.serviceImpactId ?? null,
+  estimatedCost: catalog?.estimatedCost != null && catalog.estimatedCost !== "" ? Number(catalog.estimatedCost) : undefined,
   urgencyId: catalog?.urgency?.urgencyId ?? null,
   slaName: catalog?.slaName ?? "",
   tags: catalog?.tags ?? [],
@@ -150,7 +177,6 @@ interface CatalogEditorProps {
   workflows: CatalogWorkflow[];
   groups: CatalogLookupItem[];
   priorities: CatalogLookupItem[];
-  impacts: CatalogLookupItem[];
   urgencies: CatalogLookupItem[];
   lookupErrors: string[];
   busy: boolean;
@@ -166,7 +192,6 @@ function CatalogEditor({
   workflows,
   groups,
   priorities,
-  impacts,
   urgencies,
   lookupErrors,
   busy,
@@ -193,6 +218,7 @@ function CatalogEditor({
 
   const sections = [...(catalog?.sections ?? [])].sort((a, b) => a.displayOrder - b.displayOrder);
   const variables = [...(catalog?.variables ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
+  const serviceImpacts = useAsync(() => serviceRequestApi.serviceImpacts(), []);
   const set = <K extends keyof CatalogPayload>(key: K, value: CatalogPayload[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
   const setList = (key: "tags" | "userGroups" | "departments" | "locations", text: string) =>
@@ -331,7 +357,11 @@ function CatalogEditor({
       dateMax: variable.dateMax ?? "",
       allowedFileTypes: variable.allowedFileTypes ?? "",
       maxFileSizeMb: variable.maxFileSizeMb == null ? "" : String(variable.maxFileSizeMb),
-      lookupSource: variable.lookupSource ?? "",
+      lookupSource: variable.fieldType === "user_lookup"
+        ? PERSON_SOURCE
+        : variable.fieldType === "group_lookup"
+          ? (variable.lookupSource ? normalizeLookupSource(variable.lookupSource) : DEFAULT_LOOKUP_SOURCE)
+          : (variable.lookupSource ?? ""),
       optionsText: optionsToText(variable),
     });
   };
@@ -353,6 +383,12 @@ function CatalogEditor({
       setError("Each option needs a label and value. Use Label|value or repeat the label as its value.");
       return;
     }
+    const resolvedLookupSource = variableDraft.fieldType === "user_lookup"
+      ? PERSON_SOURCE
+      : variableDraft.fieldType === "group_lookup"
+        ? normalizeLookupSource(variableDraft.lookupSource || DEFAULT_LOOKUP_SOURCE)
+        : undefined;
+
     const payload: CatalogVariablePayload = {
       label: variableDraft.label.trim(),
       fieldType: variableDraft.fieldType,
@@ -370,7 +406,7 @@ function CatalogEditor({
       dateMax: variableDraft.dateMax || undefined,
       allowedFileTypes: variableDraft.allowedFileTypes || undefined,
       maxFileSizeMb: variableDraft.maxFileSizeMb ? Number(variableDraft.maxFileSizeMb) : undefined,
-      lookupSource: variableDraft.lookupSource || undefined,
+      lookupSource: resolvedLookupSource,
       options: options ?? [],
       sortOrder: editingVariable?.sortOrder ?? variables.length,
     };
@@ -465,7 +501,7 @@ function CatalogEditor({
               <div className="service-request-fields two-column">
                 <Field label="Catalog name *"><input className="input" required value={draft.catalogName} onChange={(event) => set("catalogName", event.target.value)} /></Field>
                 <Field label="Catalog code"><input className="input" value={draft.catalogCode ?? ""} onChange={(event) => set("catalogCode", event.target.value)} /></Field>
-                <Field label="Service category"><select className="select" value={draft.serviceCategoryId ?? ""} onChange={(event) => set("serviceCategoryId", event.target.value ? Number(event.target.value) : null)}><option value="">Uncategorized</option>{categories.map((category) => <option key={category.serviceCategoryId} value={category.serviceCategoryId}>{category.categoryName}{category.isActive === false ? " (inactive)" : ""}</option>)}</select></Field>
+                <Field label="Service category" wide><CategoryPicker categories={categories} value={draft.serviceCategoryId ?? null} onChange={(id) => set("serviceCategoryId", id)} /></Field>
                 <Field label="Item type"><select className="select" value={draft.itemType ?? "Standard"} onChange={(event) => set("itemType", event.target.value)}>{["Standard", "Service", "Hardware", "Software", "Access"].map((type) => <option key={type}>{type}</option>)}</select></Field>
                 <Field label="Short description"><input className="input" value={draft.shortDescription ?? ""} onChange={(event) => set("shortDescription", event.target.value)} /></Field>
                 <Field label="Request type"><select className="select" value={draft.requestType ?? "Access"} onChange={(event) => set("requestType", event.target.value)}>{["Access", "Hardware", "Software", "Service", "Information", "Change"].map((type) => <option key={type}>{type}</option>)}</select></Field>
@@ -482,13 +518,14 @@ function CatalogEditor({
             <section className="card service-request-section">
               <div className="service-request-section-heading"><div><h2>Service and fulfillment</h2><p>Default routing, workflow, impact, urgency, and time estimates.</p></div></div>
               <div className="service-request-fields two-column">
-                <Field label="Approval workflow"><select className="select" value={draft.workflowId ?? ""} onChange={(event) => set("workflowId", event.target.value ? Number(event.target.value) : null)}><option value="">No workflow</option>{workflows.map((workflow) => <option key={workflow.workflowId} value={workflow.workflowId}>{workflow.workflowName}</option>)}</select></Field>
+                <Field label="Lifecycle"><select className="select" value={draft.workflowId ?? ""} onChange={(event) => set("workflowId", event.target.value ? Number(event.target.value) : null)}><option value="">No approval</option>{workflows.map((workflow) => <option key={workflow.workflowId} value={workflow.workflowId}>{workflow.workflowName}</option>)}</select></Field>
                 <Field label="Fulfillment workflow"><select className="select" value={draft.fulfillmentWorkflowId ?? ""} onChange={(event) => set("fulfillmentWorkflowId", event.target.value ? Number(event.target.value) : null)}><option value="">No workflow</option>{workflows.map((workflow) => <option key={workflow.workflowId} value={workflow.workflowId}>{workflow.workflowName}</option>)}</select></Field>
                 <Field label="Fulfillment group"><select className="select" value={draft.fulfillmentGroupId ?? ""} onChange={(event) => set("fulfillmentGroupId", event.target.value ? Number(event.target.value) : null)}><option value="">No group</option>{groups.map((group) => <option key={group.groupId} value={group.groupId}>{group.groupName}</option>)}</select></Field>
                 <Field label="Assignment group"><select className="select" value={draft.assignmentGroupId ?? ""} onChange={(event) => set("assignmentGroupId", event.target.value ? Number(event.target.value) : null)}><option value="">No group</option>{groups.map((group) => <option key={group.groupId} value={group.groupId}>{group.groupName}</option>)}</select></Field>
-                <Field label="Impact"><select className="select" value={draft.impactId ?? ""} onChange={(event) => set("impactId", event.target.value ? Number(event.target.value) : null)}><option value="">Select impact</option>{impacts.map((impact) => <option key={impact.impactId} value={impact.impactId}>{impact.impactName}</option>)}</select></Field>
+                <Field label="Impact"><select className="select" value={draft.serviceImpactId ?? ""} onChange={(event) => set("serviceImpactId", event.target.value ? Number(event.target.value) : null)}><option value="">Select impact</option>{(serviceImpacts.data ?? []).map((impact) => <option key={impact.serviceImpactId} value={impact.serviceImpactId}>{impact.impactName}</option>)}</select></Field>
+                <Field label="Est. cost ($)"><input className="input" type="number" min="0" step="0.01" value={draft.estimatedCost ?? ""} onChange={(event) => set("estimatedCost", event.target.value === "" ? undefined : Number(event.target.value))} /></Field>
                 <Field label="Urgency"><select className="select" value={draft.urgencyId ?? ""} onChange={(event) => set("urgencyId", event.target.value ? Number(event.target.value) : null)}><option value="">Select urgency</option>{urgencies.map((urgency) => <option key={urgency.urgencyId} value={urgency.urgencyId}>{urgency.urgencyName}</option>)}</select></Field>
-                <Field label="Default priority"><select className="select" value={draft.priorityId ?? ""} onChange={(event) => set("priorityId", event.target.value ? Number(event.target.value) : null)}><option value="">Select priority</option>{priorities.map((priority) => <option key={priority.priorityId} value={priority.priorityId}>{priority.priorityName}</option>)}</select></Field>
+                <Field label="Priority"><select className="select" value={draft.priorityId ?? ""} onChange={(event) => set("priorityId", event.target.value ? Number(event.target.value) : null)}><option value="">Automatic — from the priority matrix</option>{priorities.map((priority) => <option key={priority.priorityId} value={priority.priorityId}>{priority.priorityName}</option>)}</select></Field>
                 <Field label="Stage"><select className="select" value={draft.stage ?? "Production"} onChange={(event) => set("stage", event.target.value)}>{["Draft", "Testing", "Production", "Retired"].map((stage) => <option key={stage}>{stage}</option>)}</select></Field>
                 <Field label="SLA name"><input className="input" value={draft.slaName ?? ""} onChange={(event) => set("slaName", event.target.value)} /></Field>
                 <Field label="Estimated time (days)"><input className="input" type="number" min="0" value={draft.estimatedTime ?? ""} onChange={(event) => set("estimatedTime", event.target.value === "" ? undefined : Number(event.target.value))} /></Field>
@@ -552,7 +589,11 @@ function CatalogEditor({
                 {variables.length > 0 && <div className="service-request-table-wrap"><table className="service-request-table">
                   <thead><tr><th>Field</th><th>Type</th><th>Section</th><th>Required</th><th>Visibility</th><th>Order</th><th>Actions</th></tr></thead>
                   <tbody>{variables.map((variable) => <tr key={variable.variableId}>
-                    <td>{variable.label}</td><td>{variable.fieldType.replace("_", " ")}</td><td>{variable.section?.name || variable.sectionName || "General"}</td><td>{variable.isMandatory ? "Yes" : "No"}</td><td>{variable.isVisible ? "Visible" : "Hidden"}</td>
+                    <td>{variable.label}</td>
+                    <td>{variable.fieldType === "user_lookup" ? "Person (User table)" : variable.fieldType === "group_lookup" ? `Lookup: ${lookupSourceLabel(variable.lookupSource)}` : FIELD_TYPE_LABELS[variable.fieldType] ?? variable.fieldType.replace("_", " ")}</td>
+                    <td>{variable.section?.name || variable.sectionName || "General"}</td>
+                    <td>{variable.isMandatory ? "Yes" : "No"}</td>
+                    <td>{variable.isVisible ? "Visible" : "Hidden"}</td>
                     <td><div className="service-request-row-actions"><button type="button" className="btn-ghost btn-sm" title="Move field up" disabled={busy} onClick={() => void moveVariable(variable, -1)}><ArrowUp size={13} /></button><button type="button" className="btn-ghost btn-sm" title="Move field down" disabled={busy} onClick={() => void moveVariable(variable, 1)}><ArrowDown size={13} /></button></div></td>
                     <td><div className="service-request-row-actions"><button type="button" className="btn-ghost btn-sm" onClick={() => editVariable(variable)}>Edit</button><button type="button" className="btn-danger btn-sm" disabled={busy} onClick={() => { if (window.confirm(`Remove field "${variable.label}"?`)) void runCatalogAction(() => serviceRequestApi.deleteVariable(catalog.catalogId, variable.variableId), "Form field removed."); }}><Trash2 size={13} /> Remove</button></div></td>
                   </tr>)}</tbody>
@@ -561,7 +602,26 @@ function CatalogEditor({
                   <h3>{editingVariable ? `Edit "${editingVariable.label}"` : "Add a field"}</h3>
                   <div className="service-request-fields two-column">
                     <Field label="Field label *"><input className="input" required value={variableDraft.label} onChange={(event) => setVariableDraft((form) => ({ ...form, label: event.target.value }))} /></Field>
-                    <Field label="Field type"><select className="select" value={variableDraft.fieldType} onChange={(event) => setVariableDraft((form) => ({ ...form, fieldType: event.target.value as CatalogFieldType }))}>{FIELD_TYPES.map((type) => <option key={type} value={type}>{type.replace("_", " ")}</option>)}</select></Field>
+                    <Field label="Field type">
+                      <select
+                        className="select"
+                        value={variableDraft.fieldType}
+                        onChange={(event) => {
+                          const nextType = event.target.value as CatalogFieldType;
+                          setVariableDraft((form) => ({
+                            ...form,
+                            fieldType: nextType,
+                            lookupSource: nextType === "user_lookup" ? PERSON_SOURCE : nextType === "group_lookup" ? (form.lookupSource ? normalizeLookupSource(form.lookupSource) : DEFAULT_LOOKUP_SOURCE) : form.lookupSource,
+                          }));
+                        }}
+                      >
+                        {FIELD_TYPES.map((type) => (
+                          <option key={type} value={type}>
+                            {FIELD_TYPE_LABELS[type] ?? type.replace("_", " ")}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
                     <Field label="Section"><select className="select" value={variableDraft.sectionId} onChange={(event) => setVariableDraft((form) => ({ ...form, sectionId: event.target.value }))}><option value="">General</option>{sections.map((section) => <option key={section.sectionId} value={section.sectionId}>{section.name}</option>)}</select></Field>
                     <Field label="Default value"><input className="input" value={variableDraft.defaultValue} onChange={(event) => setVariableDraft((form) => ({ ...form, defaultValue: event.target.value }))} /></Field>
                     <Field label="Placeholder"><input className="input" value={variableDraft.placeholder} onChange={(event) => setVariableDraft((form) => ({ ...form, placeholder: event.target.value }))} /></Field>
@@ -570,7 +630,33 @@ function CatalogEditor({
                     {["text", "textarea"].includes(variableDraft.fieldType) && <Field label="Validation regex"><input className="input" value={variableDraft.validationRegex} onChange={(event) => setVariableDraft((form) => ({ ...form, validationRegex: event.target.value }))} /></Field>}
                     {["date", "datetime"].includes(variableDraft.fieldType) && <><Field label="Minimum date"><input className="input" type="date" value={variableDraft.dateMin} onChange={(event) => setVariableDraft((form) => ({ ...form, dateMin: event.target.value }))} /></Field><Field label="Maximum date"><input className="input" type="date" value={variableDraft.dateMax} onChange={(event) => setVariableDraft((form) => ({ ...form, dateMax: event.target.value }))} /></Field></>}
                     {variableDraft.fieldType === "attachment" && <><Field label="Allowed file types"><input className="input" placeholder=".pdf,.png,.jpg" value={variableDraft.allowedFileTypes} onChange={(event) => setVariableDraft((form) => ({ ...form, allowedFileTypes: event.target.value }))} /></Field><Field label="Maximum file size (MB)"><input className="input" type="number" min="1" value={variableDraft.maxFileSizeMb} onChange={(event) => setVariableDraft((form) => ({ ...form, maxFileSizeMb: event.target.value }))} /></Field></>}
-                    {["user_lookup", "group_lookup"].includes(variableDraft.fieldType) && <Field label="Lookup filter hint"><input className="input" value={variableDraft.lookupSource} onChange={(event) => setVariableDraft((form) => ({ ...form, lookupSource: event.target.value }))} /></Field>}
+                    {variableDraft.fieldType === "user_lookup" && (
+                      <div className="service-request-field">
+                        <span className="lbl">Source table</span>
+                        <div style={{ fontSize: 13, color: "#1D2939", padding: "8px 12px", background: "#F2F4F7", borderRadius: 6 }}>
+                          <strong>User table</strong> — Requesters search and select people from the User directory (name, email, employee ID).
+                        </div>
+                      </div>
+                    )}
+                    {variableDraft.fieldType === "group_lookup" && (
+                      <Field label="Source table *">
+                        <select
+                          className="select"
+                          required
+                          value={variableDraft.lookupSource ? normalizeLookupSource(variableDraft.lookupSource) : DEFAULT_LOOKUP_SOURCE}
+                          onChange={(event) => setVariableDraft((form) => ({ ...form, lookupSource: event.target.value }))}
+                        >
+                          {LOOKUP_SOURCES.map((source) => (
+                            <option key={source.key} value={source.key}>
+                              {source.label}
+                            </option>
+                          ))}
+                        </select>
+                        <span style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4, display: "block" }}>
+                          Values are picked from this table (Location, Department, Email, etc.).
+                        </span>
+                      </Field>
+                    )}
                     {OPTION_FIELDS.includes(variableDraft.fieldType) && <Field label="Options (one per line: Label|value)" wide><textarea className="textarea" required value={variableDraft.optionsText} onChange={(event) => setVariableDraft((form) => ({ ...form, optionsText: event.target.value }))} /></Field>}
                     <div className="admin-catalog-toggle-row service-request-field-wide">
                       <Toggle checked={variableDraft.isMandatory} onChange={(value) => setVariableDraft((form) => ({ ...form, isMandatory: value }))} label="Required" />
@@ -658,10 +744,18 @@ function CatalogEditor({
 }
 
 function PreviewVariable({ variable }: { variable: CatalogVariable }) {
+  const isPerson = variable.fieldType === "user_lookup";
+  const isLookup = variable.fieldType === "group_lookup";
+  const [lookupValue, setLookupValue] = useState("");
+  const lookupSource = isPerson ? PERSON_SOURCE : normalizeLookupSource(variable.lookupSource);
   return <label className="service-request-field admin-catalog-preview-field"><span className="lbl">{variable.label}{variable.isMandatory && <span className="req"> *</span>}</span>
     {variable.fieldType === "info"
       ? <div className="service-request-info">{variable.helpText || variable.defaultValue || "Information"}</div>
-      : <input className="input" disabled placeholder={variable.placeholder || variable.fieldType.replace("_", " ")} />}
+      : isPerson
+        ? <LookupField source={lookupSource} value={lookupValue} label={lookupValue} onSelect={(option) => setLookupValue(option?.value ?? "")} placeholder={variable.placeholder || "Select a person (User table)…"} ariaLabel={variable.label} />
+        : isLookup
+          ? <LookupField source={lookupSource} value={lookupValue} label={lookupValue} onSelect={(option) => setLookupValue(option?.value ?? "")} placeholder={variable.placeholder || `Select from ${lookupSourceLabel(lookupSource)} table…`} ariaLabel={variable.label} />
+          : <input className="input" disabled placeholder={variable.placeholder || FIELD_TYPE_LABELS[variable.fieldType] || variable.fieldType.replace("_", " ")} />}
     {variable.helpText && variable.fieldType !== "info" && <span className="service-request-help">{variable.helpText}</span>}
   </label>;
 }
@@ -732,7 +826,6 @@ export function AdminCatalogsPage() {
       workflows={workflowsQuery.data ?? []}
       groups={groupsQuery.data ?? []}
       priorities={prioritiesQuery.data ?? []}
-      impacts={impactsQuery.data ?? []}
       urgencies={urgenciesQuery.data ?? []}
       lookupErrors={lookupErrors}
       busy={busy}
@@ -784,6 +877,31 @@ export function AdminCatalogsPage() {
         </>}
         </section>
       </div>
+    </div>
+  );
+}
+
+/** Pick a category level by level (up to five levels), so the item can sit under a category at any level. */
+function CategoryPicker({ categories, value, onChange }: { categories: ServiceCatalogCategory[]; value: number | null; onChange: (id: number | null) => void }) {
+  const byId = new Map(categories.map((c) => [c.serviceCategoryId, c]));
+  const chain: ServiceCatalogCategory[] = [];
+  for (let cur = value ? byId.get(value) : undefined; cur && chain.length < 6; cur = cur.parentCategoryId ? byId.get(cur.parentCategoryId) : undefined) chain.unshift(cur);
+  const childrenOf = (parent: number | null) => categories.filter((c) => (c.parentCategoryId ?? null) === parent);
+  const levels = [...chain.map((c) => c.parentCategoryId ?? null), chain.length ? chain[chain.length - 1].serviceCategoryId : null];
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      {levels.map((parent, i) => {
+        const options = childrenOf(parent);
+        if (!options.length && i > 0) return null;
+        return (
+          <select key={i} className="select" aria-label={`Category level ${i + 1}`} value={chain[i]?.serviceCategoryId ?? ""}
+            onChange={(e) => onChange(e.target.value ? Number(e.target.value) : (chain[i - 1]?.serviceCategoryId ?? null))}>
+            <option value="">{i === 0 ? "Uncategorized" : `Stay at ${chain[i - 1]?.categoryName ?? "level " + i}`}</option>
+            {options.map((c) => <option key={c.serviceCategoryId} value={c.serviceCategoryId}>{c.categoryName}{c.isActive === false ? " (inactive)" : ""}</option>)}
+          </select>
+        );
+      })}
+      <div style={{ fontSize: 12, color: "var(--muted)" }}>{chain.length ? chain.map((c) => c.categoryName).join(" › ") : "Pick a category, then a sub-category if you want to go deeper."} · <Link to="/config/admin/service-category">Manage categories</Link></div>
     </div>
   );
 }

@@ -18,4 +18,6 @@ export const buildDatabaseConfig = (
   synchronize: false, // schema changes go through migrations only, always
   autoLoadEntities: true,
   logging: config.get<string>("env") === "development",
+  maxQueryExecutionTime: 300,
+  extra: { max: Number(process.env.DB_POOL_MAX ?? 20) },
 });

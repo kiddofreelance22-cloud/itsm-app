@@ -4,11 +4,16 @@ export type Status = "NEW" | "ASSIGNED" | "IN_PROGRESS" | "PENDING" | "ON_HOLD" 
 
 export interface User {
   id: string;
+  username?: string;
   email: string;
   name: string;
+  profilePhotoUrl?: string;
   role: Role;
   roles: string[];
   workgroup: string | null;
+  actingAs?: { userId: number; fullName: string };
+  impersonationId?: string;
+  supportExpiresAt?: number;
 }
 
 export interface Incident {

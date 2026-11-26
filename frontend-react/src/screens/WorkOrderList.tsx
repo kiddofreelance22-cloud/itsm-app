@@ -42,21 +42,34 @@ function LinkedIncidentCard({ incidentId }: { incidentId: string }) {
 
 interface GroupRec { groupId: number; groupName: string }
 interface UserRec { userId: number; fullName: string; isActive?: boolean }
-const blank = { incidentId: "", priority: "P3 - Medium", title: "", notes: "", groupId: "", assignedTo: "", status: "Open", isActive: true };
+const blank = { incidentId: "", requestNumber: "", priority: "P3 - Medium", title: "", notes: "", groupId: "", assignedTo: "", status: "Open", isActive: true };
 
 export function WorkOrderListPage() {
   const { data, loading, error, reload } = useAsync(() => workOrderApi.list(), []);
   const groups = useAsync(() => api.get<GroupRec[]>("/assignment-groups"), []);
-  const users = useAsync(() => api.get<UserRec[]>("/users").catch(() => [] as UserRec[]), []);
+  // /users is Admin-only, so analysts get the light assignable list instead (an empty list was why engineer names were missing).
+  const users = useAsync(() => api.get<UserRec[]>("/users/assignable").catch(() => api.get<UserRec[]>("/users").catch(() => [] as UserRec[])), []);
   const [query, setQuery] = useState("");
+  const [statusF, setStatusF] = useState("");
+  const [groupF, setGroupF] = useState("");
   const [mode, setMode] = useState<"list" | "new" | WorkOrderRow>("list");
   const [form, setForm] = useState(blank);
+  // Engineers of the chosen workgroup; with no workgroup picked, everybody who can be assigned.
+  const groupMembers = useAsync(
+    () => (form.groupId ? api.get<{ members?: UserRec[] }>(`/assignment-groups/${form.groupId}`).then((g) => g.members ?? []).catch(() => null) : Promise.resolve(null)),
+    [form.groupId],
+  );
+  const assigneeOptions = (() => {
+    const base = (form.groupId && groupMembers.data ? groupMembers.data : users.data ?? []).filter((u) => u.isActive !== false);
+    const current = mode !== "list" && mode !== "new" && mode.assignedToId ? { userId: mode.assignedToId, fullName: mode.assignedTo } : null;
+    return current && !base.some((u) => u.userId === current.userId) && String(current.userId) === form.assignedTo ? [current, ...base] : base;
+  })();
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
   const items = data ?? [];
   const q = query.trim().toLowerCase();
-  const filtered = items.filter((w) => !q || [w.woNumber, w.title, w.workgroup, w.incidentRef ?? ""].some((s) => s.toLowerCase().includes(q)));
+  const filtered = items.filter((w) => (!statusF || w.status === statusF) && (!groupF || (groupF === "__none" ? !w.workgroup || w.workgroup === "—" : w.workgroup === groupF)) && (!q || [w.woNumber, w.title, w.workgroup, w.incidentRef ?? ""].some((s) => s.toLowerCase().includes(q))));
 
   // /work-orders?open=<id> (from the Analyst Dashboard) jumps straight into that work order.
   useEffect(() => {
@@ -68,13 +81,14 @@ export function WorkOrderListPage() {
 
   const openNew = () => { setForm(blank); setFormError(""); setMode("new"); };
   const openEdit = (w: WorkOrderRow) => {
-    setForm({ incidentId: w.incidentRef ?? "", priority: w.priority, title: w.title, notes: w.notes, groupId: w.groupId ? String(w.groupId) : "",
+    setForm({ incidentId: w.incidentRef ?? "", requestNumber: w.requestNumber ?? "", priority: w.priority, title: w.title, notes: w.notes, groupId: w.groupId ? String(w.groupId) : "",
       assignedTo: w.assignedToId ? String(w.assignedToId) : "", status: w.status, isActive: w.isActive });
     setFormError(""); setMode(w);
   };
 
   const save = async () => {
     if (!form.title.trim()) { setFormError("Title is required."); return; }
+    if (form.status === "Completed" && !form.assignedTo) { setFormError("Assign this work order to an engineer before completing it."); return; }
     setSaving(true); setFormError("");
     const payload = {
       incidentId: form.incidentId.trim() || null, title: form.title.trim(), notes: form.notes.trim() || null,
@@ -116,10 +130,8 @@ export function WorkOrderListPage() {
           <div className="card" style={{ padding: 28 }}>
             <ErrorBar msg={formError} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
-              <div className="field-group"><label className="lbl">Related Incident</label>
-                <input className="input" placeholder="e.g. INC001" value={form.incidentId} readOnly={editing && !!(mode as WorkOrderRow).incidentId}
-                  style={editing && (mode as WorkOrderRow).incidentId ? { background: "#F2F4F7" } : undefined}
-                  onChange={(e) => setForm({ ...form, incidentId: e.target.value })} /></div>
+              <div className="field-group"><label className="lbl">Related Service Request</label>
+                <input className="input" value={form.requestNumber || "—"} readOnly style={{ background: "#F2F4F7" }} /></div>
               <div className="field-group"><label className="lbl">Priority</label>
                 <select className="select" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
                   {WO_PRIORITIES.map((p) => <option key={p}>{p}</option>)}</select></div>
@@ -129,16 +141,14 @@ export function WorkOrderListPage() {
               <div className="field-group" style={{ gridColumn: "1 / -1" }}><label className="lbl">Work Details</label>
                 <textarea className="textarea" rows={4} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
               <div className="field-group"><label className="lbl">Workgroup</label>
-                <select className="select" value={form.groupId} onChange={(e) => setForm({ ...form, groupId: e.target.value })}>
+                <select className="select" value={form.groupId} onChange={(e) => setForm({ ...form, groupId: e.target.value, assignedTo: "" })}>
                   <option value="">— None —</option>{(groups.data ?? []).map((g) => <option key={g.groupId} value={g.groupId}>{g.groupName}</option>)}</select></div>
               <div className="field-group"><label className="lbl">Assigned To</label>
                 <select className="select" value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}>
-                  <option value="">Unassigned</option>{(users.data ?? []).filter((u) => u.isActive !== false).map((u) => <option key={u.userId} value={u.userId}>{u.fullName}</option>)}</select></div>
+                  <option value="">Unassigned</option>{assigneeOptions.map((u) => <option key={u.userId} value={u.userId}>{u.fullName}</option>)}</select></div>
               <div className="field-group"><label className="lbl">Status</label>
                 <select className="select" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                   {WO_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></div>
-              <div className="field-group" style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-                <label className="admin-master-check-label"><input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} /> Record Status: Active</label></div>
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 28, paddingTop: 20, borderTop: "1px solid var(--border-soft)" }}>
               <button className="btn-primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save Changes"}</button>
@@ -166,6 +176,8 @@ export function WorkOrderListPage() {
             <div className="proto-search-wrap">
               <Search size={14} aria-hidden="true" />
               <input className="proto-search" placeholder="Search by WO number, incident, workgroup…" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <select className="select" style={{ maxWidth: 160 }} aria-label="Filter by status" value={statusF} onChange={(e) => setStatusF(e.target.value)}><option value="">All statuses</option>{[...new Set(items.map((w) => w.status))].map((x) => <option key={x}>{x}</option>)}</select>
+              <select className="select" style={{ maxWidth: 200 }} aria-label="Filter by workgroup" value={groupF} onChange={(e) => setGroupF(e.target.value)}><option value="">All workgroups</option><option value="__none">No workgroup</option>{[...new Set(items.map((w) => w.workgroup).filter((g) => g && g !== "—"))].map((x) => <option key={x}>{x}</option>)}</select>
             </div>
           </div>
           <div className="admin-master-table-scroll">

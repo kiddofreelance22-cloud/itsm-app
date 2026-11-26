@@ -7,6 +7,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import { ApiTags, ApiBearerAuth } from "@nestjs/swagger";
@@ -21,6 +22,7 @@ import { CreateWorkflowStepDto } from "./dto/create-workflow-step.dto";
 import { UpdateWorkflowStepDto } from "./dto/update-workflow-step.dto";
 import { UpdateWorkflowTransitionsDto } from "./dto/update-workflow-transitions.dto";
 import { ReplaceWorkflowStepApprovalLevelsDto } from "./dto/workflow-step-approval-level.dto";
+import { ReplaceWorkflowStepTasksDto } from "./dto/workflow-step-tasks.dto";
 
 @ApiTags("workflows")
 @ApiBearerAuth()
@@ -37,14 +39,21 @@ export class WorkflowsController {
 
   @Get()
   @Roles("Admin")
-  findAll() {
-    return this.workflowsService.findAll();
+  findAll(@Query("scope") scope?: "service_request" | "knowledge") {
+    return this.workflowsService.findAll(scope);
   }
 
   @Get("activity-definitions")
   @Roles("Admin")
   getActivityDefinitions() {
     return this.workflowsService.getActivityDefinitions();
+  }
+
+  /** Which catalog items use each lifecycle (for the Used by column and delete protection). */
+  @Get("usage")
+  @Roles("Admin")
+  usage() {
+    return this.workflowsService.usage();
   }
 
   @Get(":workflowId")
@@ -113,6 +122,25 @@ export class WorkflowsController {
     @Body() dto: ReplaceWorkflowStepApprovalLevelsDto
   ) {
     return this.workflowsService.replaceApprovalLevels(workflowId, workflowStepId, dto.levels);
+  }
+
+  @Get(":workflowId/steps/:workflowStepId/tasks")
+  @Roles("Admin")
+  getTasks(
+    @Param("workflowId", ParseIntPipe) workflowId: number,
+    @Param("workflowStepId", ParseIntPipe) workflowStepId: number
+  ) {
+    return this.workflowsService.getTasks(workflowId, workflowStepId);
+  }
+
+  @Put(":workflowId/steps/:workflowStepId/tasks")
+  @Roles("Admin")
+  replaceTasks(
+    @Param("workflowId", ParseIntPipe) workflowId: number,
+    @Param("workflowStepId", ParseIntPipe) workflowStepId: number,
+    @Body() dto: ReplaceWorkflowStepTasksDto
+  ) {
+    return this.workflowsService.replaceTasks(workflowId, workflowStepId, dto.tasks);
   }
 
   @Patch(":workflowId/steps/:workflowStepId/reorder")

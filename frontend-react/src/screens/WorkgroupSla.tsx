@@ -45,7 +45,7 @@ export function WorkgroupSlaPage() {
   const [err, setErr] = useState("");
   return (
     <>
-      <PageHeader crumb="Configuration > SLA Configurations > Workgroup SLA Window" title="Workgroup SLA Window"
+      <PageHeader crumb="Configuration > Incident SLA Configurations > Workgroup SLA Window" title="Workgroup SLA Window"
         subtitle="Assign each workgroup the service window (business-hours calendar) its Response and Resolution SLA clocks follow." />
       <div className="page-body">
         <div className="card admin-master-table-wrap">

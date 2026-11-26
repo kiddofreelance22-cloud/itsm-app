@@ -7,6 +7,9 @@ export interface JwtPayload {
   sub: number; // userId
   username: string;
   roles: string[];
+  exp?: number;
+  impersonatedBy?: { userId: number; fullName: string };
+  impersonationId?: string;
 }
 
 /**
@@ -29,6 +32,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       userId: payload.sub,
       username: payload.username,
       roles: payload.roles,
+      impersonatedBy: payload.impersonatedBy,
+      impersonationId: payload.impersonationId,
+      expiresAt: payload.exp ? payload.exp * 1000 : undefined,
     };
   }
 }

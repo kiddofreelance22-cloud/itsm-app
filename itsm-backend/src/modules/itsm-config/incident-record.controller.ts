@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, ParseIntPipe, Post, Put, Patch, UseGuards,
+  BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, ParseIntPipe, Post, Put, Patch, Query, UseGuards,
   ForbiddenException,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
@@ -12,8 +12,11 @@ import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Incident } from "../incidents/entities/incident.entity";
+import { IncidentTicketLinksService } from "../incidents/incident-ticket-links.service";
+import { AttachLinkDto, LinkCandidatesQueryDto } from "../requests/dto/request-links.dto";
+import { IncidentActivity } from "../incidents/entities/incident-activity.entity";
 import { WoChecklistItem } from "./entities/wo-checklist-item.entity";
-import { IncidentChecklistProgress, IncidentLink, RoleNavigationAccess } from "./entities/incident-record.entities";
+import { IncidentAttachment, IncidentChecklistProgress, IncidentLink, RoleNavigationAccess } from "./entities/incident-record.entities";
 import { RuleEngineService } from "./rule-engine.service";
 import { IncidentsService } from "../incidents/incidents.service";
 import { Role } from "../roles/entities/role.entity";
@@ -24,6 +27,7 @@ class NavRowDto {
   @IsString() @IsNotEmpty() @MaxLength(120) navKey!: string;
   @IsBoolean() visible!: boolean;
   @IsBoolean() canCreate!: boolean;
+  @IsOptional() @IsInt() roleId?: number;
 }
 class SaveNavDto { @IsArray() @ArrayMaxSize(300) @ValidateNested({ each: true }) @Type(() => NavRowDto) rows!: NavRowDto[]; }
 
@@ -35,8 +39,11 @@ export class IncidentRecordController {
     @InjectRepository(WoChecklistItem) private items: Repository<WoChecklistItem>,
     @InjectRepository(IncidentChecklistProgress) private progress: Repository<IncidentChecklistProgress>,
     @InjectRepository(IncidentLink) private links: Repository<IncidentLink>,
+    @InjectRepository(IncidentAttachment) private attachments: Repository<IncidentAttachment>,
+    @InjectRepository(IncidentActivity) private activities: Repository<IncidentActivity>,
     private rules: RuleEngineService,
     private svc: IncidentsService,
+    private ticketLinks: IncidentTicketLinksService,
   ) {}
 
   private async mustFind(ref: string): Promise<Incident> {
@@ -46,6 +53,20 @@ export class IncidentRecordController {
   }
   private assertOpenForEdit(i: Incident) {
     if (["Closed", "Cancelled"].includes(i.status)) throw new BadRequestException(`This incident is ${i.status.toLowerCase()} and locked.`);
+  }
+
+  /** Items that name evidence (an attachment / a CI) can only be ticked once that evidence exists on the incident. */
+  private async assertEvidence(inc: Incident, itemId: number) {
+    const cl = await this.rules.checklistFor(inc.incidentId);
+    const item = cl.items.find((x) => x.id === itemId);
+    if (!item) return;
+    const text = `${item.name} ${item.description}`.toLowerCase();
+    if (/\b(attach|upload|screenshot|evidence)|\blogs?\b/.test(text) && !(await this.attachments.count({ where: { incidentId: inc.incidentId } }))) {
+      throw new BadRequestException(`Attach the supporting file to this incident before ticking "${item.name}".`);
+    }
+    if (/\b(ci|configuration item|asset)\b/.test(text) && !inc.affectedAsset?.trim()) {
+      throw new BadRequestException(`Set the Configuration Item / Affected Asset on this incident before ticking "${item.name}".`);
+    }
   }
 
   // ── Checklist ──
@@ -72,8 +93,16 @@ export class IncidentRecordController {
       const item = await this.items.findOne({ where: { id: dto.itemId, isActive: true } });
       if (!item) throw new NotFoundException("Checklist item not found");
     }
+    if (dto.done) await this.assertEvidence(inc, dto.itemId);
     await this.progress.save({ incidentId: inc.incidentId, itemId: dto.itemId, done: dto.done, doneBy: dto.done ? userId : null, doneAt: dto.done ? new Date() : null });
-    return this.rules.checklistFor(inc.incidentId);
+    // Audit trail: who ticked / un-ticked which task, and when.
+    const after = await this.rules.checklistFor(inc.incidentId);
+    const label = after.items.find((x) => x.id === dto.itemId)?.name ?? `item ${dto.itemId}`;
+    await this.activities.save(this.activities.create({
+      incident: inc, actor: { userId } as any, type: "work_note",
+      content: `Checklist task "${label}" marked ${dto.done ? "done" : "not done"}.`, meta: { itemId: dto.itemId, done: dto.done },
+    }));
+    return after;
   }
 
   // ── Related items ──
@@ -114,6 +143,25 @@ export class IncidentRecordController {
     if (!row || (row.incidentId !== a.incidentId && row.linkedIncidentId !== a.incidentId)) throw new NotFoundException("Link not found");
     await this.links.remove(row);
     return this.linkRows(a.incidentId);
+  }
+
+  // ── Links to tickets of any type ──
+  @Get(":id/ticket-links/candidates") @Roles("Admin", "Fulfiller")
+  linkCandidates(@Param("id") id: string, @CurrentUser("userId") userId: number, @Query() query: LinkCandidatesQueryDto) {
+    return this.ticketLinks.candidates(id, userId, query);
+  }
+
+  @Get(":id/ticket-links") @Roles("Admin", "Fulfiller")
+  listTicketLinks(@Param("id") id: string) { return this.ticketLinks.list(id); }
+
+  @Post(":id/ticket-links") @Roles("Admin", "Fulfiller")
+  attachTicketLink(@Param("id") id: string, @CurrentUser("userId") userId: number, @Body() dto: AttachLinkDto) {
+    return this.ticketLinks.attach(id, userId, dto.type, dto.targetNumber, dto.relation);
+  }
+
+  @Delete(":id/ticket-links/:linkId") @Roles("Admin", "Fulfiller")
+  removeTicketLink(@Param("id") id: string, @Param("linkId", ParseIntPipe) linkId: number) {
+    return this.ticketLinks.remove(id, linkId);
   }
 
   // ── Resume SLA ──

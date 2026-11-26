@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Bell, HelpCircle, ChevronDown, Menu, User, Settings, LogOut, Grid2X2 } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/hooks/use-auth";
+import { resolveAssetUrl } from "@/lib/api/client";
 
 interface NavbarProps {
   onMenuClick: () => void;
@@ -55,6 +56,7 @@ export function Navbar({ onMenuClick }: NavbarProps) {
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 rounded-md py-1 pl-1 pr-2 text-sm hover:bg-[rgba(255,255,255,0.1)]">
               <Avatar className="size-6 rounded-[4px]">
+                <AvatarImage src={user?.profilePhotoUrl ? resolveAssetUrl(user.profilePhotoUrl) : undefined} alt="" />
                 <AvatarFallback className="rounded-[4px] bg-brand-600 text-[10px] text-white">
                   {initials}
                 </AvatarFallback>

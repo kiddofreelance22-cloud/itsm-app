@@ -99,7 +99,7 @@ export function SlaMatrixPage() {
             </div>
           )}
           <div style={{ padding: "0 20px 20px", display: "flex", gap: 16, fontSize: 13 }}>
-            <Link to="/config/admin/workgroups">Manage Workgroups</Link>
+            <Link to="/config/admin/groups">Manage Groups</Link>
             <Link to="/config/admin/priority">Edit Default Priority SLA</Link>
           </div>
         </div>
@@ -187,7 +187,7 @@ export function WorkgroupSlaPage() {
               </table>
               <div style={{ display: "flex", gap: 16, fontSize: 13, marginTop: 18 }}>
                 <Link to="/config/admin/sla-service-window">Manage Service Windows</Link>
-                <Link to="/config/admin/workgroups">Manage Workgroups</Link>
+                <Link to="/config/admin/groups">Manage Groups</Link>
               </div>
             </div>
           )}
